@@ -1,0 +1,21 @@
+supabase.txt
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env / secrets
+.env
+.env.*
+
+# Build output
+dist/
+.next/
+
+# Artifacts
+artifacts/
+
+# Local program source (avoid accidental commit)
+Essentials_Program_-_4x.xlsx
