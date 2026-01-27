@@ -124,6 +124,9 @@ export default async function ProgramRunPage({
           <Link className="btn btnPrimary" href={`/app/workout?week=${week}&workout=${workoutIndex}`}>
             Start workout
           </Link>
+          <Link className="btn" href="/app/history">
+            History
+          </Link>
           <form action={completeWorkoutAction}>
             <input type="hidden" name="user_program_id" value={runRes.data.id} />
             <input type="hidden" name="workout_number" value={String(nextWorkoutNumber)} />

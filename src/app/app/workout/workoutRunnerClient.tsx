@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { VideoModal } from "../../../components/VideoModal";
 import { BottomSheet } from "../../../components/BottomSheet";
@@ -21,6 +22,17 @@ type LastRow = {
   } | null;
   sets: Array<{ set_number: number; weight: number | null; reps: number | null; rpe: number | null; unit: string | null }>;
 };
+
+type HistorySession = LastRow;
+
+function compareBestSet(a: { weight: number; reps: number } | null, b: { weight: number; reps: number } | null): number {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+  if (a.weight !== b.weight) return a.weight > b.weight ? 1 : -1;
+  if (a.reps !== b.reps) return a.reps > b.reps ? 1 : -1;
+  return 0;
+}
 
 function parseRestSeconds(restTarget: string | null): number {
   if (!restTarget) return 90;
@@ -75,6 +87,11 @@ export function WorkoutRunnerClient({
   const [lastPrefetchStatus, setLastPrefetchStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [lastPrefetchError, setLastPrefetchError] = useState<string | null>(null);
   const [lastByName, setLastByName] = useState<Record<string, LastRow | null>>({});
+
+  const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historySessions, setHistorySessions] = useState<HistorySession[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -146,6 +163,42 @@ export function WorkoutRunnerClient({
       cancelled = true;
     };
   }, [programTemplateId, prefetchNames]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!lastOpenFor) return;
+      setHistoryStatus("loading");
+      setHistoryError(null);
+      setHistorySessions([]);
+      setHistoryIndex(0);
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const res = await supabase.rpc("get_exercise_history", {
+          program_template_id: programTemplateId,
+          exercise_name: lastOpenFor,
+          limit_n: 12,
+          offset_n: 0
+        });
+        if (res.error) throw new Error(res.error.message);
+        const rows = (res.data as unknown as HistorySession[] | null) ?? [];
+        if (cancelled) return;
+        setHistorySessions(rows);
+        setHistoryStatus("ready");
+      } catch (e) {
+        if (cancelled) return;
+        setHistoryStatus("error");
+        setHistoryError(e instanceof Error ? e.message : "Failed to load exercise history");
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [lastOpenFor, programTemplateId]);
 
   const header = useMemo(() => {
     return `${label} workout`;
@@ -363,61 +416,124 @@ export function WorkoutRunnerClient({
         title={lastOpenFor ? `Last time: ${lastOpenFor}` : "Last time"}
         onClose={() => {
           setLastOpenFor(null);
+          setHistoryStatus("idle");
+          setHistoryError(null);
+          setHistorySessions([]);
+          setHistoryIndex(0);
         }}
       >
-        {lastPrefetchStatus === "loading" ? <div className="label">Loading…</div> : null}
+        {lastPrefetchStatus === "loading" || historyStatus === "loading" ? <div className="label">Loading…</div> : null}
         {lastPrefetchStatus === "error" ? (
           <div className="label" style={{ color: "rgba(245, 158, 11, 0.9)" }}>
             {lastPrefetchError ?? "Failed to load history"}
           </div>
         ) : null}
 
-        {lastOpenFor && lastPrefetchStatus === "ready" && !(lastOpenFor in lastByName) ? (
-          <div className="label">No previous logged workout for this exercise yet.</div>
-        ) : null}
-
-        {lastOpenFor && lastPrefetchStatus === "ready" && lastByName[lastOpenFor] ? (
-          <div style={{ display: "grid", gap: 10 }}>
-            <div className="label">
-              Performed at: {new Date(lastByName[lastOpenFor]!.performed_at).toLocaleString()}
-            </div>
-            <div>
-              <div style={{ fontWeight: 800 }}>Last working set</div>
-              <div className="label" style={{ marginTop: 4 }}>
-                {lastByName[lastOpenFor]!.last_set
-                  ? `Set ${lastByName[lastOpenFor]!.last_set!.set_number}: ${
-                      lastByName[lastOpenFor]!.last_set!.weight ?? "-"
-                    }${lastByName[lastOpenFor]!.last_set!.unit ?? ""} x ${
-                      lastByName[lastOpenFor]!.last_set!.reps ?? "-"
-                    } @ ${lastByName[lastOpenFor]!.last_set!.rpe ?? "-"}`
-                  : "No working sets logged"}
-              </div>
-            </div>
-
-            {Array.isArray(lastByName[lastOpenFor]!.sets) && lastByName[lastOpenFor]!.sets.length ? (
-              <div>
-                <div style={{ fontWeight: 800 }}>All working sets</div>
-                <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                  {lastByName[lastOpenFor]!.sets.map((s) => (
-                    <div
-                      key={s.set_number}
-                      className="card"
-                      style={{ padding: 10, boxShadow: "none", background: "rgba(255,255,255,0.04)" }}
-                    >
-                      <div className="label">
-                        Set {s.set_number}: {s.weight ?? "-"}
-                        {s.unit ?? ""} x {s.reps ?? "-"} @ {s.rpe ?? "-"}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
+        {historyStatus === "error" ? (
+          <div className="label" style={{ color: "rgba(245, 158, 11, 0.9)" }}>
+            {historyError ?? "Failed to load exercise history"}
           </div>
         ) : null}
 
-        {lastOpenFor && lastPrefetchStatus === "ready" && lastByName[lastOpenFor] === null ? (
+        {lastOpenFor && historyStatus === "ready" && historySessions.length === 0 ? (
           <div className="label">No previous logged workout for this exercise yet.</div>
+        ) : null}
+
+        {lastOpenFor && historyStatus === "ready" && historySessions.length ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {(() => {
+              const session = historySessions[Math.min(historyIndex, historySessions.length - 1)];
+              const bestByUnit = new Map<string, { weight: number; reps: number }>();
+
+              for (const s of historySessions) {
+                for (const set of s.sets ?? []) {
+                  if (set.weight == null || set.reps == null) continue;
+                  const unitKey = (set.unit ?? "").trim() || "";
+                  const curr = bestByUnit.get(unitKey) ?? null;
+                  const candidate = { weight: Number(set.weight), reps: Number(set.reps) };
+                  if (compareBestSet(candidate, curr) > 0) bestByUnit.set(unitKey, candidate);
+                }
+              }
+
+              const bestLines = Array.from(bestByUnit.entries())
+                .filter(([unitKey]) => unitKey !== "")
+                .map(([unitKey, v]) => `${v.weight}${unitKey} x ${v.reps}`);
+
+              return (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div className="label">
+                      Session {historyIndex + 1}/{historySessions.length} · {new Date(session.performed_at).toLocaleString()}
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={historyIndex >= historySessions.length - 1}
+                        onClick={() => setHistoryIndex((i) => Math.min(i + 1, historySessions.length - 1))}
+                      >
+                        Older
+                      </button>
+                      <button
+                        type="button"
+                        className="btn"
+                        disabled={historyIndex <= 0}
+                        onClick={() => setHistoryIndex((i) => Math.max(i - 1, 0))}
+                      >
+                        Newer
+                      </button>
+                    </div>
+                  </div>
+
+                  {bestLines.length ? (
+                    <div>
+                      <div style={{ fontWeight: 800 }}>Best set (recent {historySessions.length})</div>
+                      <div className="label" style={{ marginTop: 4 }}>
+                        {bestLines.join(" · ")}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <div style={{ fontWeight: 800 }}>Last working set (that session)</div>
+                    <div className="label" style={{ marginTop: 4 }}>
+                      {session.last_set
+                        ? `Set ${session.last_set.set_number}: ${session.last_set.weight ?? "-"}${
+                            session.last_set.unit ?? ""
+                          } x ${session.last_set.reps ?? "-"} @ ${session.last_set.rpe ?? "-"}`
+                        : "No working sets logged"}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <Link className="btn" href={`/app/history/${session.workout_instance_id}`}>
+                      View full workout
+                    </Link>
+                  </div>
+
+                  {Array.isArray(session.sets) && session.sets.length ? (
+                    <div>
+                      <div style={{ fontWeight: 800 }}>All working sets (that session)</div>
+                      <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                        {session.sets.map((set) => (
+                          <div
+                            key={set.set_number}
+                            className="card"
+                            style={{ padding: 10, boxShadow: "none", background: "rgba(255,255,255,0.04)" }}
+                          >
+                            <div className="label">
+                              Set {set.set_number}: {set.weight ?? "-"}
+                              {set.unit ?? ""} x {set.reps ?? "-"} @ {set.rpe ?? "-"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              );
+            })()}
+          </div>
         ) : null}
       </BottomSheet>
     </div>
