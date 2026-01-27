@@ -30,7 +30,7 @@ async function completeWorkoutAction(formData: FormData) {
 
   const userProgramId = String(formData.get("user_program_id") ?? "");
   const workoutNumber = Number(formData.get("workout_number") ?? NaN);
-  const unit = String(formData.get("unit") ?? "lb");
+  const unit = String(formData.get("unit") ?? "kg");
 
   if (!userProgramId) redirect("/app/run?error=Missing%20user_program_id");
   if (!Number.isFinite(workoutNumber)) redirect("/app/run?error=Invalid%20workout_number");
@@ -169,11 +169,13 @@ async function completeWorkoutAction(formData: FormData) {
 }
 
 export function WorkoutRunner({
+  programTemplateId,
   userProgramId,
   workoutNumber,
   label,
   exercises
 }: {
+  programTemplateId: string;
   userProgramId: string;
   workoutNumber: number;
   label: string;
@@ -181,6 +183,7 @@ export function WorkoutRunner({
 }) {
   return (
     <WorkoutRunnerClient
+      programTemplateId={programTemplateId}
       userProgramId={userProgramId}
       workoutNumber={workoutNumber}
       label={label}

@@ -89,6 +89,7 @@ export default async function WorkoutPage({
       </div>
 
       <WorkoutRunner
+        programTemplateId={programRes.data.id}
         userProgramId={runRes.data.id}
         workoutNumber={(week - 1) * 4 + workoutIndex}
         label={workoutRes.data.label}

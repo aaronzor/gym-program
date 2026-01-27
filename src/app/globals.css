@@ -226,6 +226,17 @@ a {
   letter-spacing: 0.02em;
 }
 
+@keyframes sheetIn {
+  from {
+    transform: translateY(14px);
+    opacity: 0.92;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 @media (max-width: 520px) {
   .setRow {
     grid-template-columns: 1fr 1fr;

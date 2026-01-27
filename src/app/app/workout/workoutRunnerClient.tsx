@@ -2,9 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { VideoModal } from "../../../components/VideoModal";
+import { BottomSheet } from "../../../components/BottomSheet";
+import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
 import type { ExerciseRow } from "./workoutRunner";
 
 type Choice = "primary" | "sub1" | "sub2";
+
+type LastRow = {
+  performed_exercise_name: string;
+  performed_at: string;
+  workout_instance_id: string;
+  last_set: {
+    set_number: number;
+    weight: number | null;
+    reps: number | null;
+    rpe: number | null;
+    unit: string | null;
+  } | null;
+  sets: Array<{ set_number: number; weight: number | null; reps: number | null; rpe: number | null; unit: string | null }>;
+};
 
 function parseRestSeconds(restTarget: string | null): number {
   if (!restTarget) return 90;
@@ -34,24 +50,31 @@ function fmt(seconds: number): string {
 }
 
 export function WorkoutRunnerClient({
+  programTemplateId,
   userProgramId,
   workoutNumber,
   label,
   exercises,
   completeWorkoutAction
 }: {
+  programTemplateId: string;
   userProgramId: string;
   workoutNumber: number;
   label: string;
   exercises: ExerciseRow[];
   completeWorkoutAction: (formData: FormData) => Promise<void>;
 }) {
-  const [unit, setUnit] = useState<"lb" | "kg">("lb");
+  const [unit, setUnit] = useState<"lb" | "kg">("kg");
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
 
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [restLabel, setRestLabel] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+
+  const [lastOpenFor, setLastOpenFor] = useState<string | null>(null);
+  const [lastPrefetchStatus, setLastPrefetchStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [lastPrefetchError, setLastPrefetchError] = useState<string | null>(null);
+  const [lastByName, setLastByName] = useState<Record<string, LastRow | null>>({});
 
   useEffect(() => {
     if (!restEndsAt) return;
@@ -72,6 +95,57 @@ export function WorkoutRunnerClient({
     }, 1200);
     return () => clearTimeout(t);
   }, [restEndsAt, remaining]);
+
+  // Prefetch "last time" data for all names in this workout (primary + substitutions).
+  // This keeps the workout UI uncluttered: tapping "Last" is instant.
+  const prefetchNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const ex of exercises) {
+      if (ex.name) names.add(ex.name);
+      if (ex.sub1_name) names.add(ex.sub1_name);
+      if (ex.sub2_name) names.add(ex.sub2_name);
+    }
+    return Array.from(names).filter((n) => n.trim() !== "");
+  }, [exercises]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      if (!prefetchNames.length) return;
+      setLastPrefetchStatus("loading");
+      setLastPrefetchError(null);
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const res = await supabase.rpc("get_last_exercise_performance", {
+          program_template_id: programTemplateId,
+          exercise_names: prefetchNames
+        });
+        if (res.error) throw new Error(res.error.message);
+
+        // Build map of results
+        const rows = (res.data as unknown as LastRow[] | null) ?? [];
+        const byName: Record<string, LastRow | null> = {};
+        for (const name of prefetchNames) byName[name] = null;
+        for (const row of rows) {
+          if (row?.performed_exercise_name) byName[row.performed_exercise_name] = row;
+        }
+
+        if (cancelled) return;
+        setLastByName(byName);
+        setLastPrefetchStatus("ready");
+      } catch (e) {
+        if (cancelled) return;
+        setLastPrefetchStatus("error");
+        setLastPrefetchError(e instanceof Error ? e.message : "Failed to load exercise history");
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [programTemplateId, prefetchNames]);
 
   const header = useMemo(() => {
     return `${label} workout`;
@@ -169,6 +243,13 @@ export function WorkoutRunnerClient({
                 </div>
                 <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
                   <VideoModal url={performedVideo} />
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => setLastOpenFor(performed)}
+                  >
+                    Last
+                  </button>
                 </div>
               </div>
 
@@ -276,6 +357,69 @@ export function WorkoutRunnerClient({
           Complete workout
         </button>
       </form>
+
+      <BottomSheet
+        open={Boolean(lastOpenFor)}
+        title={lastOpenFor ? `Last time: ${lastOpenFor}` : "Last time"}
+        onClose={() => {
+          setLastOpenFor(null);
+        }}
+      >
+        {lastPrefetchStatus === "loading" ? <div className="label">Loading…</div> : null}
+        {lastPrefetchStatus === "error" ? (
+          <div className="label" style={{ color: "rgba(245, 158, 11, 0.9)" }}>
+            {lastPrefetchError ?? "Failed to load history"}
+          </div>
+        ) : null}
+
+        {lastOpenFor && lastPrefetchStatus === "ready" && !(lastOpenFor in lastByName) ? (
+          <div className="label">No previous logged workout for this exercise yet.</div>
+        ) : null}
+
+        {lastOpenFor && lastPrefetchStatus === "ready" && lastByName[lastOpenFor] ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            <div className="label">
+              Performed at: {new Date(lastByName[lastOpenFor]!.performed_at).toLocaleString()}
+            </div>
+            <div>
+              <div style={{ fontWeight: 800 }}>Last working set</div>
+              <div className="label" style={{ marginTop: 4 }}>
+                {lastByName[lastOpenFor]!.last_set
+                  ? `Set ${lastByName[lastOpenFor]!.last_set!.set_number}: ${
+                      lastByName[lastOpenFor]!.last_set!.weight ?? "-"
+                    }${lastByName[lastOpenFor]!.last_set!.unit ?? ""} x ${
+                      lastByName[lastOpenFor]!.last_set!.reps ?? "-"
+                    } @ ${lastByName[lastOpenFor]!.last_set!.rpe ?? "-"}`
+                  : "No working sets logged"}
+              </div>
+            </div>
+
+            {Array.isArray(lastByName[lastOpenFor]!.sets) && lastByName[lastOpenFor]!.sets.length ? (
+              <div>
+                <div style={{ fontWeight: 800 }}>All working sets</div>
+                <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                  {lastByName[lastOpenFor]!.sets.map((s) => (
+                    <div
+                      key={s.set_number}
+                      className="card"
+                      style={{ padding: 10, boxShadow: "none", background: "rgba(255,255,255,0.04)" }}
+                    >
+                      <div className="label">
+                        Set {s.set_number}: {s.weight ?? "-"}
+                        {s.unit ?? ""} x {s.reps ?? "-"} @ {s.rpe ?? "-"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {lastOpenFor && lastPrefetchStatus === "ready" && lastByName[lastOpenFor] === null ? (
+          <div className="label">No previous logged workout for this exercise yet.</div>
+        ) : null}
+      </BottomSheet>
     </div>
   );
 }

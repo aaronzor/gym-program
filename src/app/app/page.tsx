@@ -90,6 +90,9 @@ export default async function AppHomePage() {
             <Link className="btn" href="/app/template">
               Browse template
             </Link>
+            <Link className="btn" href="/app/history">
+              History
+            </Link>
           </div>
         </div>
 
