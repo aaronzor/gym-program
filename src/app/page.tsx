@@ -1,12 +1,6 @@
-import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "../lib/supabase/server";
-
 export default async function HomePage() {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-
-  if (user) redirect("/app");
+  // Avoid any upstream calls on initial load.
+  // This route exists only as a convenience entrypoint.
+  const { redirect } = await import("next/navigation");
   redirect("/login");
 }

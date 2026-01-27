@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { DEFAULT_SETTINGS, getUserSettings, ThemePreference, UnitPreference } from "../../../lib/settings";
 import { SettingsForm } from "./SettingsForm";
@@ -34,6 +35,20 @@ async function saveSettingsAction(formData: FormData) {
 
   if (res.error) {
     redirect(`/app/settings?error=${encodeURIComponent(res.error.message)}`);
+  }
+
+  // Mirror the theme into a cookie so layout can apply instantly
+  // without depending on an upstream DB call.
+  const cookieStore = await cookies();
+  if (safeTheme === "system") {
+    cookieStore.delete("theme");
+  } else {
+    cookieStore.set("theme", safeTheme, {
+      path: "/",
+      sameSite: "lax",
+      secure: true,
+      maxAge: 60 * 60 * 24 * 365
+    });
   }
 
   redirect("/app/settings?saved=1");
