@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
-import { getUserSettings } from "../lib/settings";
 import { AppChrome } from "../components/AppChrome";
+import { cookies } from "next/headers";
 
 const sans = Space_Grotesk({
   subsets: ["latin"],
@@ -20,10 +20,11 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Intentionally server-side: ensures theme applies on first paint.
-  // If the user selects "system", we omit the data attribute and let CSS media queries decide.
-  const settings = await getUserSettings();
-  const dataTheme = settings.theme === "system" ? undefined : settings.theme;
+  // Theme is read from a first-party cookie to avoid upstream calls
+  // during SSR (improves reliability on mobile networks).
+  const cookieStore = await cookies();
+  const theme = cookieStore.get("theme")?.value;
+  const dataTheme = theme === "dark" || theme === "light" ? theme : undefined;
 
   return (
     <html
