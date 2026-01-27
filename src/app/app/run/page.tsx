@@ -8,29 +8,6 @@ function computeWeekAndWorkoutIndex(workoutNumber: number): { week: number; work
   return { week, workoutIndex };
 }
 
-async function completeWorkoutAction(formData: FormData) {
-  "use server";
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const userProgramId = String(formData.get("user_program_id") ?? "");
-  if (!userProgramId) redirect("/app/run?error=Missing%20user_program_id");
-
-  const workoutNumber = Number(formData.get("workout_number") ?? NaN);
-  if (!Number.isFinite(workoutNumber)) redirect("/app/run?error=Invalid%20workout_number");
-
-  const ins = await supabase.from("workout_instances").insert({
-    user_program_id: userProgramId,
-    workout_number: workoutNumber,
-    performed_at: new Date().toISOString()
-  });
-  if (ins.error) redirect(`/app/run?error=${encodeURIComponent(ins.error.message)}`);
-  redirect("/app/run");
-}
-
 export default async function ProgramRunPage({
   searchParams
 }: {
@@ -115,10 +92,7 @@ export default async function ProgramRunPage({
       ) : null}
 
       <div className="card" style={{ marginTop: 16, padding: 18 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>Quick progress</h2>
-        <div className="label" style={{ marginTop: 10 }}>
-          Start the next workout to log sets, substitutions, and watch form videos in a modal.
-        </div>
+        <h2 style={{ margin: 0, fontSize: 18 }}>Next workout</h2>
 
         <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
           <Link className="btn btnPrimary" href={`/app/workout?week=${week}&workout=${workoutIndex}`}>
@@ -127,13 +101,6 @@ export default async function ProgramRunPage({
           <Link className="btn" href="/app/history">
             History
           </Link>
-          <form action={completeWorkoutAction}>
-            <input type="hidden" name="user_program_id" value={runRes.data.id} />
-            <input type="hidden" name="workout_number" value={String(nextWorkoutNumber)} />
-            <button className="btn" type="submit">
-              Quick-complete (debug)
-            </button>
-          </form>
         </div>
       </div>
     </div>

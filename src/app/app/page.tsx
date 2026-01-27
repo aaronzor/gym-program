@@ -95,13 +95,6 @@ export default async function AppHomePage() {
             </Link>
           </div>
         </div>
-
-        <div className="card" style={{ padding: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Coming next</h2>
-          <div className="label" style={{ marginTop: 10 }}>
-            Completion-based “next workout”, workout runner, set logging, and video modal.
-          </div>
-        </div>
       </div>
     </div>
   );

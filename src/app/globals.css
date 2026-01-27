@@ -120,6 +120,36 @@ a {
     box-shadow 160ms ease;
 }
 
+.btnLg {
+  padding: 12px 16px;
+  min-height: 48px;
+  font-weight: 700;
+  width: 100%;
+}
+
+.authShell {
+  min-height: calc(100vh - 44px);
+  display: grid;
+  align-items: center;
+}
+
+.authCard {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.authMark {
+  width: 52px;
+  height: 52px;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--accentRgb), 0.40);
+  background: rgba(var(--accentRgb), 0.10);
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+}
+
 .btnIcon {
   padding: 8px;
   min-width: 40px;
