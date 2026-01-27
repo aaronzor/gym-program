@@ -82,6 +82,8 @@ export function WorkoutRunnerClient({
 
   const [swapOpenOrder, setSwapOpenOrder] = useState<number | null>(null);
 
+  const [expandedByOrder, setExpandedByOrder] = useState<Record<number, boolean>>({ 1: true });
+
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [restLabel, setRestLabel] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -261,6 +263,7 @@ export function WorkoutRunnerClient({
         {exercises.map((ex) => {
           const order = ex.order_index;
           const choice: Choice = choiceByOrder[order] ?? "primary";
+          const expanded = expandedByOrder[order] ?? false;
 
           const performed =
             choice === "sub1"
@@ -284,14 +287,54 @@ export function WorkoutRunnerClient({
               key={ex.id}
               className="card cardInset"
               style={{
-                padding: 14,
+                padding: expanded ? 14 : 10,
                 boxShadow: "none",
                 overflow: "hidden"
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={() => setExpandedByOrder((s) => ({ ...s, [order]: !(s[order] ?? false) }))}
+                  style={{
+                    padding: 0,
+                    border: 0,
+                    background: "transparent",
+                    color: "inherit",
+                    font: "inherit",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    minWidth: 0,
+                    flex: "1 1 auto"
+                  }}
+                  aria-label={expanded ? "Collapse exercise" : "Expand exercise"}
+                >
                   <div style={{ fontWeight: 800, minWidth: 0 }}>{performed}</div>
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setExpandedByOrder((s) => ({ ...s, [order]: !(s[order] ?? false) }))}
+                  aria-label={expanded ? "Collapse" : "Expand"}
+                  title={expanded ? "Collapse" : "Expand"}
+                >
+                  <Icon name={expanded ? "chevronUp" : "chevronDown"} />
+                  <span className="srOnly">{expanded ? "Collapse" : "Expand"}</span>
+                </button>
+              </div>
+
+              <div style={{ display: expanded ? "block" : "none" }}>
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    alignItems: "flex-start",
+                    flexWrap: "wrap"
+                  }}
+                >
                   <div className="chips">
                     <span className="chip" title="Warm-up sets">
                       <span className="chipIcon" aria-hidden="true">
@@ -333,59 +376,92 @@ export function WorkoutRunnerClient({
                       </span>
                     ) : null}
                   </div>
+
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <VideoModal url={performedVideo} variant="icon" label="Video" />
+                    <button
+                      type="button"
+                      className="btn btnIcon"
+                      onClick={() => setLastOpenFor(performed)}
+                      aria-label="Last time"
+                      title="Last time"
+                    >
+                      <Icon name="history" />
+                      <span className="srOnly">Last time</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btnIcon"
+                      onClick={() => {
+                        const end = Date.now() + restSeconds * 1000;
+                        setRestEndsAt(end);
+                        setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
+                      }}
+                      aria-label="Start rest"
+                      title="Start rest"
+                    >
+                      <Icon name="timer" />
+                      <span className="srOnly">Start rest</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btnIcon"
+                      onClick={() => setSwapOpenOrder(order)}
+                      aria-label="Swap exercise"
+                      title="Swap"
+                    >
+                      <Icon name="swap" />
+                      <span className="srOnly">Swap</span>
+                    </button>
+                  </div>
                 </div>
+
+                {ex.notes ? (
+                  <div className="label" style={{ marginTop: 10 }}>
+                    {ex.notes}
+                  </div>
+                ) : null}
+
                 <div
                   style={{
-                    display: "flex",
-                    gap: 6,
-                    alignItems: "flex-start",
-                    flexWrap: "wrap",
-                    flex: "0 0 auto"
+                    marginTop: 14,
+                    borderTop: "1px solid var(--line)",
+                    paddingTop: 12,
+                    display: "grid",
+                    gap: 10
                   }}
                 >
-                  <VideoModal url={performedVideo} variant="icon" label="Video" />
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => setLastOpenFor(performed)}
-                    aria-label="Last time"
-                    title="Last time"
-                  >
-                    <Icon name="history" />
-                    <span className="srOnly">Last time</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => {
-                      const end = Date.now() + restSeconds * 1000;
-                      setRestEndsAt(end);
-                      setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
-                    }}
-                    aria-label="Start rest"
-                    title="Start rest"
-                  >
-                    <Icon name="timer" />
-                    <span className="srOnly">Start rest</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btnIcon"
-                    onClick={() => setSwapOpenOrder(order)}
-                    aria-label="Swap exercise"
-                    title="Swap"
-                  >
-                    <Icon name="swap" />
-                    <span className="srOnly">Swap</span>
-                  </button>
+                  {Array.from({ length: workingSets }).map((_, i) => {
+                    const setNumber = i + 1;
+                    return (
+                      <div
+                        key={setNumber}
+                        className="setRow"
+                      >
+                        <div className="setLabel">Set {setNumber}</div>
+                        <input
+                          className="input"
+                          inputMode="decimal"
+                          name={`log_${order}_set_${setNumber}_weight`}
+                          placeholder={`Weight (${unit})`}
+                        />
+                        <input
+                          className="input"
+                          inputMode="numeric"
+                          name={`log_${order}_set_${setNumber}_reps`}
+                          placeholder="Reps"
+                        />
+                        <input
+                          className="input"
+                          inputMode="decimal"
+                          name={`log_${order}_set_${setNumber}_rpe`}
+                          placeholder="RPE"
+                        />
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {ex.notes ? (
-                <div className="label" style={{ marginTop: 10 }}>
-                  {ex.notes}
-                </div>
-              ) : null}
 
               {/* Substitutions moved into a bottom sheet to keep mobile UI compact */}
 
@@ -399,45 +475,6 @@ export function WorkoutRunnerClient({
               <input type="hidden" name={`ex_${order}_sub2_name`} value={ex.sub2_name ?? ""} />
               <input type="hidden" name={`ex_${order}_sub2_video`} value={ex.sub2_video_url ?? ""} />
 
-              <div
-                style={{
-                  marginTop: 14,
-                  borderTop: "1px solid var(--line)",
-                  paddingTop: 12,
-                  display: "grid",
-                  gap: 10
-                }}
-              >
-                {Array.from({ length: workingSets }).map((_, i) => {
-                  const setNumber = i + 1;
-                  return (
-                    <div
-                      key={setNumber}
-                      className="setRow"
-                    >
-                      <div className="setLabel">Set {setNumber}</div>
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        name={`log_${order}_set_${setNumber}_weight`}
-                        placeholder={`Weight (${unit})`}
-                      />
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        name={`log_${order}_set_${setNumber}_reps`}
-                        placeholder="Reps"
-                      />
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        name={`log_${order}_set_${setNumber}_rpe`}
-                        placeholder="RPE"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           );
         })}

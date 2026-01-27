@@ -6,6 +6,8 @@ type IconName =
   | "warmup"
   | "sets"
   | "target"
+  | "chevronDown"
+  | "chevronUp"
   | "chevronLeft"
   | "chevronRight"
   | "x";
@@ -95,6 +97,18 @@ export function Icon({
       return (
         <svg {...common}>
           <path d="M9 6l6 6-6 6" />
+        </svg>
+      );
+    case "chevronDown":
+      return (
+        <svg {...common}>
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      );
+    case "chevronUp":
+      return (
+        <svg {...common}>
+          <path d="M18 15l-6-6-6 6" />
         </svg>
       );
     case "x":
