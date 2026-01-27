@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "./Icon";
 
 export function BottomSheet({
   open,
@@ -75,8 +76,9 @@ export function BottomSheet({
           }}
         >
           <div style={{ fontWeight: 800 }}>{title}</div>
-          <button className="btn" type="button" onClick={onClose}>
-            Close
+          <button className="btn btnIcon" type="button" onClick={onClose} aria-label="Close" title="Close">
+            <Icon name="x" />
+            <span className="srOnly">Close</span>
           </button>
         </div>
         <div style={{ padding: 14, overflow: "auto" }}>{children}</div>

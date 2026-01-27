@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { VideoModal } from "../../../components/VideoModal";
 import { BottomSheet } from "../../../components/BottomSheet";
 import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { Icon } from "../../../components/Icon";
 import type { ExerciseRow } from "./workoutRunner";
 
 type Choice = "primary" | "sub1" | "sub2";
@@ -78,6 +79,8 @@ export function WorkoutRunnerClient({
 }) {
   const [unit, setUnit] = useState<"lb" | "kg">("kg");
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
+
+  const [swapOpenOrder, setSwapOpenOrder] = useState<number | null>(null);
 
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [restLabel, setRestLabel] = useState<string | null>(null);
@@ -294,14 +297,41 @@ export function WorkoutRunnerClient({
                     {ex.rest_target ? ` · rest ${ex.rest_target}` : ""}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <VideoModal url={performedVideo} />
+                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <VideoModal url={performedVideo} variant="icon" label="Video" />
                   <button
                     type="button"
-                    className="btn"
+                    className="btn btnIcon"
                     onClick={() => setLastOpenFor(performed)}
+                    aria-label="Last time"
+                    title="Last time"
                   >
-                    Last
+                    <Icon name="history" />
+                    <span className="srOnly">Last time</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btnIcon"
+                    onClick={() => {
+                      const end = Date.now() + restSeconds * 1000;
+                      setRestEndsAt(end);
+                      setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
+                    }}
+                    aria-label="Start rest"
+                    title="Start rest"
+                  >
+                    <Icon name="timer" />
+                    <span className="srOnly">Start rest</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btnIcon"
+                    onClick={() => setSwapOpenOrder(order)}
+                    aria-label="Swap exercise"
+                    title="Swap"
+                  >
+                    <Icon name="swap" />
+                    <span className="srOnly">Swap</span>
                   </button>
                 </div>
               </div>
@@ -312,46 +342,7 @@ export function WorkoutRunnerClient({
                 </div>
               ) : null}
 
-              <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className={choice === "primary" ? "btn btnPrimary" : "btn"}
-                  onClick={() => setChoiceByOrder((s) => ({ ...s, [order]: "primary" }))}
-                >
-                  Primary
-                </button>
-                {ex.sub1_name ? (
-                  <button
-                    type="button"
-                    className={choice === "sub1" ? "btn btnPrimary" : "btn"}
-                    onClick={() => setChoiceByOrder((s) => ({ ...s, [order]: "sub1" }))}
-                  >
-                    {ex.sub1_name}
-                  </button>
-                ) : null}
-                {ex.sub2_name ? (
-                  <button
-                    type="button"
-                    className={choice === "sub2" ? "btn btnPrimary" : "btn"}
-                    onClick={() => setChoiceByOrder((s) => ({ ...s, [order]: "sub2" }))}
-                  >
-                    {ex.sub2_name}
-                  </button>
-                ) : null}
-
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => {
-                    const end = Date.now() + restSeconds * 1000;
-                    setRestEndsAt(end);
-                    setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
-                  }}
-                  title="Start rest timer"
-                >
-                  Start rest
-                </button>
-              </div>
+              {/* Substitutions moved into a bottom sheet to keep mobile UI compact */}
 
               {/* Hidden values used by server action */}
               <input type="hidden" name={`ex_${order}_template_id`} value={ex.id} />
@@ -412,6 +403,49 @@ export function WorkoutRunnerClient({
       </form>
 
       <BottomSheet
+        open={swapOpenOrder != null}
+        title="Swap exercise"
+        onClose={() => setSwapOpenOrder(null)}
+      >
+        {swapOpenOrder != null ? (
+          (() => {
+            const ex = exercises.find((e) => e.order_index === swapOpenOrder);
+            if (!ex) return <div className="label">Exercise not found.</div>;
+
+            const choice: Choice = choiceByOrder[swapOpenOrder] ?? "primary";
+
+            const options: Array<{ value: Choice; label: string }> = [
+              { value: "primary", label: ex.name }
+            ];
+            if (ex.sub1_name) options.push({ value: "sub1", label: ex.sub1_name });
+            if (ex.sub2_name) options.push({ value: "sub2", label: ex.sub2_name });
+
+            return (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="label">Choose a substitution for this whole exercise slot.</div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={opt.value === choice ? "btn btnPrimary" : "btn"}
+                      style={{ justifyContent: "flex-start", width: "100%" }}
+                      onClick={() => {
+                        setChoiceByOrder((s) => ({ ...s, [swapOpenOrder]: opt.value }));
+                        setSwapOpenOrder(null);
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()
+        ) : null}
+      </BottomSheet>
+
+      <BottomSheet
         open={Boolean(lastOpenFor)}
         title={lastOpenFor ? `Last time: ${lastOpenFor}` : "Last time"}
         onClose={() => {
@@ -468,19 +502,25 @@ export function WorkoutRunnerClient({
                     <div style={{ display: "flex", gap: 10 }}>
                       <button
                         type="button"
-                        className="btn"
+                        className="btn btnIcon"
                         disabled={historyIndex >= historySessions.length - 1}
                         onClick={() => setHistoryIndex((i) => Math.min(i + 1, historySessions.length - 1))}
+                        aria-label="Older session"
+                        title="Older"
                       >
-                        Older
+                        <Icon name="chevronLeft" />
+                        <span className="srOnly">Older</span>
                       </button>
                       <button
                         type="button"
-                        className="btn"
+                        className="btn btnIcon"
                         disabled={historyIndex <= 0}
                         onClick={() => setHistoryIndex((i) => Math.max(i - 1, 0))}
+                        aria-label="Newer session"
+                        title="Newer"
                       >
-                        Newer
+                        <Icon name="chevronRight" />
+                        <span className="srOnly">Newer</span>
                       </button>
                     </div>
                   </div>
