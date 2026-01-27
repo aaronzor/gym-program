@@ -285,7 +285,7 @@ export function WorkoutRunnerClient({
           return (
             <div
               key={ex.id}
-              className="card cardInset"
+              className={expanded ? "card cardInset cardActive" : "card cardInset"}
               style={{
                 padding: expanded ? 14 : 10,
                 boxShadow: "none",
