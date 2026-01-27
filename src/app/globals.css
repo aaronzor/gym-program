@@ -273,6 +273,21 @@ a {
   letter-spacing: -0.01em;
 }
 
+.workoutTimer {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radiusSm);
+  border: 1px solid var(--controlBorder);
+  background: var(--controlBg);
+}
+
+.workoutTimerTime {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
 .btnIcon {
   padding: 8px;
   min-width: 40px;

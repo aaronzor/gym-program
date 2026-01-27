@@ -33,14 +33,18 @@ async function completeWorkoutAction(formData: FormData) {
   const unit = String(formData.get("unit") ?? "kg");
   const startedAtMsRaw = String(formData.get("started_at_ms") ?? "").trim();
   const startedAtMs = startedAtMsRaw ? Number(startedAtMsRaw) : NaN;
+  const durationSecondsRaw = String(formData.get("duration_seconds") ?? "").trim();
+  const durationSecondsFromClient = durationSecondsRaw ? Number(durationSecondsRaw) : NaN;
 
   if (!userProgramId) redirect("/app/run?error=Missing%20user_program_id");
   if (!Number.isFinite(workoutNumber)) redirect("/app/run?error=Invalid%20workout_number");
 
   const performedAt = new Date();
-  const durationSeconds = Number.isFinite(startedAtMs)
-    ? Math.max(0, Math.round((performedAt.getTime() - startedAtMs) / 1000))
-    : null;
+  const durationSeconds = Number.isFinite(durationSecondsFromClient)
+    ? Math.max(0, Math.round(durationSecondsFromClient))
+    : Number.isFinite(startedAtMs)
+      ? Math.max(0, Math.round((performedAt.getTime() - startedAtMs) / 1000))
+      : null;
 
   // Insert workout instance
   const wi = await supabase

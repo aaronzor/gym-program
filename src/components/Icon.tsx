@@ -1,5 +1,6 @@
 type IconName =
   | "play"
+  | "pause"
   | "history"
   | "timer"
   | "swap"
@@ -38,6 +39,13 @@ export function Icon({
       return (
         <svg {...common}>
           <path d="M8 5v14l11-7z" fill="currentColor" stroke="none" />
+        </svg>
+      );
+    case "pause":
+      return (
+        <svg {...common}>
+          <path d="M7 5v14" />
+          <path d="M17 5v14" />
         </svg>
       );
     case "history":

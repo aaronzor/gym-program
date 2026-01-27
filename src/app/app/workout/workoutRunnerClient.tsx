@@ -74,6 +74,35 @@ function fmt(seconds: number): string {
   return `${m}:${String(r).padStart(2, "0")}`;
 }
 
+type TimerState = {
+  running: boolean;
+  runningSinceMs: number | null;
+  accumulatedMs: number;
+};
+
+function loadTimer(key: string): TimerState {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) throw new Error("no timer");
+    const parsed = JSON.parse(raw) as Partial<TimerState>;
+    const running = Boolean(parsed.running);
+    const runningSinceMs = typeof parsed.runningSinceMs === "number" ? parsed.runningSinceMs : null;
+    const accumulatedMs = typeof parsed.accumulatedMs === "number" ? parsed.accumulatedMs : 0;
+    return { running, runningSinceMs, accumulatedMs };
+  } catch {
+    const now = Date.now();
+    return { running: true, runningSinceMs: now, accumulatedMs: 0 };
+  }
+}
+
+function saveTimer(key: string, state: TimerState): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
 export function WorkoutRunnerClient({
   programTemplateId,
   userProgramId,
@@ -96,7 +125,7 @@ export function WorkoutRunnerClient({
   completeWorkoutAction: (formData: FormData) => Promise<void>;
 }) {
   const draftKey = useMemo(() => `draft:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
-  const startKey = useMemo(() => `workoutStart:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
+  const timerKey = useMemo(() => `timer:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
 
   const [unit, setUnit] = useState<"lb" | "kg">(defaultUnit);
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
@@ -109,7 +138,11 @@ export function WorkoutRunnerClient({
 
   const [draftInputs, setDraftInputs] = useState<Record<string, string>>({});
   const [draftRestored, setDraftRestored] = useState(false);
-  const [startedAtMs, setStartedAtMs] = useState<number>(() => Date.now());
+  const [timerState, setTimerState] = useState<TimerState>({
+    running: true,
+    runningSinceMs: Date.now(),
+    accumulatedMs: 0
+  });
 
   useEffect(() => {
     try {
@@ -128,22 +161,18 @@ export function WorkoutRunnerClient({
     }
 
     try {
-      const existing = localStorage.getItem(startKey);
-      if (existing) {
-        const n = Number(existing);
-        if (Number.isFinite(n)) {
-          setStartedAtMs(n);
-          return;
-        }
-      }
-      const now = Date.now();
-      localStorage.setItem(startKey, String(now));
-      setStartedAtMs(now);
+      const state = loadTimer(timerKey);
+      setTimerState(state);
+      saveTimer(timerKey, state);
     } catch {
       // ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    saveTimer(timerKey, timerState);
+  }, [timerKey, timerState]);
 
   function persistDraft(next: Partial<{ unit: "kg" | "lb"; choiceByOrder: any; expandedByOrder: any; setDone: any; inputs: any }>) {
     try {
@@ -165,6 +194,12 @@ export function WorkoutRunnerClient({
   const [restLabel, setRestLabel] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
 
+  const workoutElapsedSeconds = useMemo(() => {
+    const base = timerState.accumulatedMs;
+    const live = timerState.running && timerState.runningSinceMs ? Math.max(0, now - timerState.runningSinceMs) : 0;
+    return Math.max(0, Math.round((base + live) / 1000));
+  }, [now, timerState]);
+
   const [lastOpenFor, setLastOpenFor] = useState<string | null>(null);
   const [lastPrefetchStatus, setLastPrefetchStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [lastPrefetchError, setLastPrefetchError] = useState<string | null>(null);
@@ -176,10 +211,10 @@ export function WorkoutRunnerClient({
   const [historyIndex, setHistoryIndex] = useState(0);
 
   useEffect(() => {
-    if (!restEndsAt) return;
+    if (!restEndsAt && !timerState.running) return;
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
-  }, [restEndsAt]);
+  }, [restEndsAt, timerState.running]);
 
   const remaining = restEndsAt ? Math.max(0, Math.ceil((restEndsAt - now) / 1000)) : 0;
   const active = Boolean(restEndsAt && remaining > 0);
@@ -300,7 +335,7 @@ export function WorkoutRunnerClient({
               onClick={() => {
                 try {
                   localStorage.removeItem(draftKey);
-                  localStorage.removeItem(startKey);
+                  localStorage.removeItem(timerKey);
                 } catch {
                   // ignore
                 }
@@ -310,6 +345,7 @@ export function WorkoutRunnerClient({
                 setChoiceByOrder({});
                 setExpandedByOrder({ 1: true });
                 setUnit(defaultUnit);
+                setTimerState({ running: true, runningSinceMs: Date.now(), accumulatedMs: 0 });
               }}
             >
               <Icon name="x" />
@@ -349,6 +385,30 @@ export function WorkoutRunnerClient({
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div className="workoutTimer" title="Workout timer">
+            <Icon name="timer" size={16} />
+            <span className="workoutTimerTime">{fmt(workoutElapsedSeconds)}</span>
+            <button
+              type="button"
+              className="btn btnIcon"
+              aria-label={timerState.running ? "Pause workout timer" : "Resume workout timer"}
+              title={timerState.running ? "Pause" : "Resume"}
+              onClick={() => {
+                setTimerState((s) => {
+                  const nowMs = Date.now();
+                  if (s.running) {
+                    const add = s.runningSinceMs ? Math.max(0, nowMs - s.runningSinceMs) : 0;
+                    return { running: false, runningSinceMs: null, accumulatedMs: s.accumulatedMs + add };
+                  }
+                  return { running: true, runningSinceMs: nowMs, accumulatedMs: s.accumulatedMs };
+                });
+              }}
+            >
+              <Icon name={timerState.running ? "pause" : "play"} size={18} />
+              <span className="srOnly">{timerState.running ? "Pause" : "Resume"}</span>
+            </button>
+          </div>
+
           <span className="label">Unit</span>
           <select
             className="input"
@@ -366,7 +426,8 @@ export function WorkoutRunnerClient({
         <input type="hidden" name="user_program_id" value={userProgramId} />
         <input type="hidden" name="workout_number" value={String(workoutNumber)} />
         <input type="hidden" name="unit" value={unit} />
-        <input type="hidden" name="started_at_ms" value={String(startedAtMs)} />
+        <input type="hidden" name="started_at_ms" value={timerState.runningSinceMs ? String(timerState.runningSinceMs) : ""} />
+        <input type="hidden" name="duration_seconds" value={String(workoutElapsedSeconds)} />
 
         {exercises.map((ex) => {
           const order = ex.order_index;
@@ -679,7 +740,7 @@ export function WorkoutRunnerClient({
           onClick={() => {
             try {
               localStorage.removeItem(draftKey);
-              localStorage.removeItem(startKey);
+              localStorage.removeItem(timerKey);
             } catch {
               // ignore
             }
