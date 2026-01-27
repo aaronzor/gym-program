@@ -3,6 +3,9 @@ type IconName =
   | "history"
   | "timer"
   | "swap"
+  | "warmup"
+  | "sets"
+  | "target"
   | "chevronLeft"
   | "chevronRight"
   | "x";
@@ -56,6 +59,30 @@ export function Icon({
           <path d="M21 3l-7 7" />
           <path d="M8 21H3v-5" />
           <path d="M3 21l7-7" />
+        </svg>
+      );
+    case "warmup":
+      return (
+        <svg {...common}>
+          {/* flame-ish warmup */}
+          <path d="M12 2c1.2 2 1.2 3.8 0 5.4 2-.4 4 1.4 4 4.1 0 2.9-1.9 5-4 5s-4-2.1-4-5c0-1.4.6-2.6 1.5-3.4C11 7.9 10.8 5.5 12 2z" />
+          <path d="M9 20c.9 1.2 1.9 2 3 2s2.1-.8 3-2" />
+        </svg>
+      );
+    case "sets":
+      return (
+        <svg {...common}>
+          {/* stacked blocks */}
+          <path d="M7 7h10v4H7z" />
+          <path d="M6 13h12v4H6z" />
+        </svg>
+      );
+    case "target":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="8" />
+          <circle cx="12" cy="12" r="4" />
+          <path d="M12 12l4-4" />
         </svg>
       );
     case "chevronLeft":

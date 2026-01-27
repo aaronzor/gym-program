@@ -285,19 +285,64 @@ export function WorkoutRunnerClient({
               className="card cardInset"
               style={{
                 padding: 14,
-                boxShadow: "none"
+                boxShadow: "none",
+                overflow: "hidden"
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 800 }}>{performed}</div>
-                  <div className="label" style={{ marginTop: 4 }}>
-                    warmups {ex.warmup_sets_target ?? "-"} · working sets {ex.working_sets_target ?? "-"} · reps{" "}
-                    {ex.reps_target ?? "-"} · RPE {ex.rpe_target ?? "-"}
-                    {ex.rest_target ? ` · rest ${ex.rest_target}` : ""}
+                <div style={{ minWidth: 0, flex: "1 1 auto" }}>
+                  <div style={{ fontWeight: 800, minWidth: 0 }}>{performed}</div>
+                  <div className="chips">
+                    <span className="chip" title="Warm-up sets">
+                      <span className="chipIcon" aria-hidden="true">
+                        <Icon name="warmup" size={16} />
+                      </span>
+                      <span className="srOnly">Warm-up sets</span>
+                      <span className="chipValue">{ex.warmup_sets_target ?? "-"}</span>
+                    </span>
+
+                    <span className="chip" title="Working sets">
+                      <span className="chipIcon" aria-hidden="true">
+                        <Icon name="sets" size={16} />
+                      </span>
+                      <span className="srOnly">Working sets</span>
+                      <span className="chipValue">{ex.working_sets_target ?? "-"}</span>
+                    </span>
+
+                    <span className="chip" title="Reps target">
+                      <span className="chipLabel">R</span>
+                      <span className="srOnly">Reps</span>
+                      <span className="chipValue">{ex.reps_target ?? "-"}</span>
+                    </span>
+
+                    <span className="chip" title="RPE target">
+                      <span className="chipIcon" aria-hidden="true">
+                        <Icon name="target" size={16} />
+                      </span>
+                      <span className="srOnly">RPE</span>
+                      <span className="chipValue">{ex.rpe_target ?? "-"}</span>
+                    </span>
+
+                    {ex.rest_target ? (
+                      <span className="chip" title="Rest target">
+                        <span className="chipIcon" aria-hidden="true">
+                          <Icon name="timer" size={16} />
+                        </span>
+                        <span className="srOnly">Rest</span>
+                        <span className="chipValue">{ex.rest_target}</span>
+                      </span>
+                    ) : null}
                   </div>
                 </div>
-                <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 6,
+                    alignItems: "flex-start",
+                    flexWrap: "wrap",
+                    flex: "0 0 auto"
+                  }}
+                >
                   <VideoModal url={performedVideo} variant="icon" label="Video" />
                   <button
                     type="button"
