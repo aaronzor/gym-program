@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
+import { Icon } from "../../components/Icon";
+
+function computeWeekAndWorkoutIndex(workoutNumber: number): { week: number; workoutIndex: number } {
+  const week = Math.floor((workoutNumber - 1) / 4) + 1;
+  const workoutIndex = ((workoutNumber - 1) % 4) + 1;
+  return { week, workoutIndex };
+}
 
 async function signOutAction() {
   "use server";
@@ -46,53 +53,93 @@ export default async function AppHomePage() {
     );
   }
 
+  const programId = program.data?.id as string | undefined;
+
+  const activeRun = programId
+    ? await supabase
+        .from("user_programs")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("program_template_id", programId)
+        .eq("status", "active")
+        .maybeSingle()
+    : { data: null, error: null };
+
+  if (activeRun.error) {
+    throw new Error(activeRun.error.message);
+  }
+
+  const completedCount = activeRun.data
+    ? (
+        await supabase
+          .from("workout_instances")
+          .select("id", { count: "exact", head: true })
+          .eq("user_program_id", activeRun.data.id)
+      ).count ?? 0
+    : 0;
+
+  const nextWorkoutNumber = completedCount + 1;
+  const next = computeWeekAndWorkoutIndex(nextWorkoutNumber);
+
   return (
     <div className="container" style={{ paddingTop: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 className="title" style={{ fontSize: 34 }}>
-            Dashboard
-          </h1>
-          <div className="label" style={{ marginTop: 6 }}>
-            Signed in as {user.email}
+      <div className="appBar">
+        <div style={{ minWidth: 0 }}>
+          <div className="appTitle">Gym Program</div>
+          <div className="label" style={{ marginTop: 4 }}>
+            {user.email}
           </div>
         </div>
         <form action={signOutAction}>
-          <button className="btn" type="submit">
-            Sign out
+          <button className="btn btnIcon" type="submit" aria-label="Sign out" title="Sign out">
+            <Icon name="x" />
+            <span className="srOnly">Sign out</span>
           </button>
         </form>
       </div>
 
-      <div className="grid" style={{ marginTop: 18 }}>
-        <div className="card" style={{ padding: 18 }}>
-          <h2 style={{ margin: 0, fontSize: 18 }}>Program template</h2>
-          <div className="label" style={{ marginTop: 10 }}>
-            {program.data ? (
-              <>
-                <div style={{ fontWeight: 600 }}>{program.data.name}</div>
-                <div className="label" style={{ marginTop: 4 }}>
-                  slug: {program.data.slug} · weeks: {program.data.weeks}
-                </div>
-              </>
-            ) : (
-              "Template not found (slug essentials-4x)."
-            )}
+      <div className="stack" style={{ marginTop: 16 }}>
+        <div className="card cardActive" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>{program.data?.name ?? "Essentials 4x"}</div>
+              <div className="label" style={{ marginTop: 6 }}>
+                {activeRun.data ? (
+                  <>Progress {completedCount}/48 · Next Week {next.week} / Workout {next.workoutIndex}</>
+                ) : (
+                  <>No active run</>
+                )}
+              </div>
+            </div>
+            <Link className="btn btnIcon" href="/app/history" aria-label="History" title="History">
+              <Icon name="history" />
+              <span className="srOnly">History</span>
+            </Link>
           </div>
 
-          <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <Link className="btn btnPrimary" href="/app/start">
-              Start program
-            </Link>
-            <Link className="btn" href="/app/run">
-              Continue run
-            </Link>
-            <Link className="btn" href="/app/template">
-              Browse template
-            </Link>
-            <Link className="btn" href="/app/history">
-              History
-            </Link>
+          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+            {activeRun.data ? (
+              <Link
+                className="btn btnPrimary btnLg"
+                href={`/app/workout?week=${next.week}&workout=${next.workoutIndex}`}
+                style={{ justifyContent: "center" }}
+              >
+                Start workout
+              </Link>
+            ) : (
+              <Link className="btn btnPrimary btnLg" href="/app/start" style={{ justifyContent: "center" }}>
+                Start program
+              </Link>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Link className="btn" href="/app/run" style={{ justifyContent: "center" }}>
+                Run
+              </Link>
+              <Link className="btn" href="/app/template" style={{ justifyContent: "center" }}>
+                Template
+              </Link>
+            </div>
           </div>
         </div>
       </div>
