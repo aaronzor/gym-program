@@ -69,6 +69,8 @@ export function WorkoutRunnerClient({
   label,
   exercises,
   defaultUnit,
+  autoRestOnSetDone,
+  focusMode,
   completeWorkoutAction
 }: {
   programTemplateId: string;
@@ -77,14 +79,75 @@ export function WorkoutRunnerClient({
   label: string;
   exercises: ExerciseRow[];
   defaultUnit: "kg" | "lb";
+  autoRestOnSetDone: boolean;
+  focusMode: boolean;
   completeWorkoutAction: (formData: FormData) => Promise<void>;
 }) {
+  const draftKey = useMemo(() => `draft:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
+  const startKey = useMemo(() => `workoutStart:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
+
   const [unit, setUnit] = useState<"lb" | "kg">(defaultUnit);
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
 
   const [swapOpenOrder, setSwapOpenOrder] = useState<number | null>(null);
 
   const [expandedByOrder, setExpandedByOrder] = useState<Record<number, boolean>>({ 1: true });
+
+  const [setDone, setSetDone] = useState<Record<string, boolean>>({});
+
+  const [draftInputs, setDraftInputs] = useState<Record<string, string>>({});
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [startedAtMs, setStartedAtMs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as any;
+        if (parsed.unit === "kg" || parsed.unit === "lb") setUnit(parsed.unit);
+        if (parsed.choiceByOrder && typeof parsed.choiceByOrder === "object") setChoiceByOrder(parsed.choiceByOrder);
+        if (parsed.expandedByOrder && typeof parsed.expandedByOrder === "object") setExpandedByOrder(parsed.expandedByOrder);
+        if (parsed.setDone && typeof parsed.setDone === "object") setSetDone(parsed.setDone);
+        if (parsed.inputs && typeof parsed.inputs === "object") setDraftInputs(parsed.inputs);
+        setDraftRestored(true);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const existing = localStorage.getItem(startKey);
+      if (existing) {
+        const n = Number(existing);
+        if (Number.isFinite(n)) {
+          setStartedAtMs(n);
+          return;
+        }
+      }
+      const now = Date.now();
+      localStorage.setItem(startKey, String(now));
+      setStartedAtMs(now);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function persistDraft(next: Partial<{ unit: "kg" | "lb"; choiceByOrder: any; expandedByOrder: any; setDone: any; inputs: any }>) {
+    try {
+      const current = {
+        unit,
+        choiceByOrder,
+        expandedByOrder,
+        setDone,
+        inputs: draftInputs
+      };
+      const merged = { ...current, ...next };
+      localStorage.setItem(draftKey, JSON.stringify(merged));
+    } catch {
+      // ignore
+    }
+  }
 
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
   const [restLabel, setRestLabel] = useState<string | null>(null);
@@ -213,6 +276,36 @@ export function WorkoutRunnerClient({
 
   return (
     <div className="card" style={{ marginTop: 16, padding: 18 }}>
+      {draftRestored ? (
+        <div className="card cardInset" style={{ padding: 12, boxShadow: "none", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+            <div className="label">Draft restored</div>
+            <button
+              type="button"
+              className="btn btnIcon"
+              aria-label="Clear draft"
+              title="Clear draft"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(draftKey);
+                  localStorage.removeItem(startKey);
+                } catch {
+                  // ignore
+                }
+                setDraftRestored(false);
+                setDraftInputs({});
+                setSetDone({});
+                setChoiceByOrder({});
+                setExpandedByOrder({ 1: true });
+                setUnit(defaultUnit);
+              }}
+            >
+              <Icon name="x" />
+              <span className="srOnly">Clear draft</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
       {restEndsAt ? (
         <div className="restBanner">
           <div className="restBannerInner">
@@ -261,6 +354,7 @@ export function WorkoutRunnerClient({
         <input type="hidden" name="user_program_id" value={userProgramId} />
         <input type="hidden" name="workout_number" value={String(workoutNumber)} />
         <input type="hidden" name="unit" value={unit} />
+        <input type="hidden" name="started_at_ms" value={String(startedAtMs)} />
 
         {exercises.map((ex) => {
           const order = ex.order_index;
@@ -317,7 +411,21 @@ export function WorkoutRunnerClient({
                 <button
                   type="button"
                   className="btn btnIcon"
-                  onClick={() => setExpandedByOrder((s) => ({ ...s, [order]: !(s[order] ?? false) }))}
+                  onClick={() => {
+                    setExpandedByOrder((s) => {
+                      const next = !(s[order] ?? false);
+                      if (!focusMode) return { ...s, [order]: next };
+
+                      const collapsed: Record<number, boolean> = {};
+                      for (const k of Object.keys(s)) collapsed[Number(k)] = false;
+                      collapsed[order] = next;
+                      return collapsed;
+                    });
+
+                    setTimeout(() => {
+                      persistDraft({ expandedByOrder: { ...expandedByOrder, [order]: !(expandedByOrder[order] ?? false) } });
+                    }, 0);
+                  }}
                   aria-label={expanded ? "Collapse" : "Expand"}
                   title={expanded ? "Collapse" : "Expand"}
                 >
@@ -405,18 +513,18 @@ export function WorkoutRunnerClient({
                       <Icon name="timer" />
                       <span className="srOnly">Start rest</span>
                     </button>
-                    <button
-                      type="button"
-                      className="btn btnIcon"
-                      onClick={() => setSwapOpenOrder(order)}
-                      aria-label="Swap exercise"
-                      title="Swap"
-                    >
-                      <Icon name="swap" />
-                      <span className="srOnly">Swap</span>
-                    </button>
-                  </div>
-                </div>
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setSwapOpenOrder(order)}
+                  aria-label="Swap exercise"
+                  title="Swap"
+                >
+                  <Icon name="swap" />
+                  <span className="srOnly">Swap</span>
+                </button>
+              </div>
+            </div>
 
                 {ex.notes ? (
                   <div className="label" style={{ marginTop: 10 }}>
@@ -435,29 +543,94 @@ export function WorkoutRunnerClient({
                 >
                   {Array.from({ length: workingSets }).map((_, i) => {
                     const setNumber = i + 1;
+                    const doneKey = `${order}:${setNumber}`;
                     return (
                       <div
                         key={setNumber}
                         className="setRow"
                       >
-                        <div className="setLabel">Set {setNumber}</div>
+                        <div className="setLabel" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button
+                            type="button"
+                            className={setDone[doneKey] ? "btn btnIcon btnPrimary" : "btn btnIcon"}
+                            aria-label={setDone[doneKey] ? "Set marked done" : "Mark set done"}
+                            title={setDone[doneKey] ? "Done" : "Mark done"}
+                            onClick={() => {
+                              setSetDone((s) => {
+                                const next = { ...s, [doneKey]: !s[doneKey] };
+                                persistDraft({ setDone: next });
+                                return next;
+                              });
+                              if (autoRestOnSetDone) {
+                                const end = Date.now() + restSeconds * 1000;
+                                setRestEndsAt(end);
+                                setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
+                              }
+                              const nextSet = setNumber + 1;
+                              const nextId = `log_${order}_set_${nextSet}_weight`;
+                              const el = document.getElementById(nextId) as HTMLInputElement | null;
+                              if (el) el.focus();
+                              if (focusMode) {
+                                setExpandedByOrder((s) => {
+                                  const next: Record<number, boolean> = {};
+                                  for (const k of Object.keys(s)) next[Number(k)] = false;
+                                  next[order] = true;
+                                  return next;
+                                });
+                              }
+                            }}
+                          >
+                            {setDone[doneKey] ? "✓" : String(setNumber)}
+                          </button>
+                        </div>
                         <input
                           className="input"
                           inputMode="decimal"
                           name={`log_${order}_set_${setNumber}_weight`}
+                          id={`log_${order}_set_${setNumber}_weight`}
                           placeholder={`Weight (${unit})`}
+                          defaultValue={draftInputs[`log_${order}_set_${setNumber}_weight`] ?? ""}
+                          onChange={(e) => {
+                            const key = `log_${order}_set_${setNumber}_weight`;
+                            const v = e.target.value;
+                            setDraftInputs((s) => {
+                              const next = { ...s, [key]: v };
+                              persistDraft({ inputs: next });
+                              return next;
+                            });
+                          }}
                         />
                         <input
                           className="input"
                           inputMode="numeric"
                           name={`log_${order}_set_${setNumber}_reps`}
                           placeholder="Reps"
+                          defaultValue={draftInputs[`log_${order}_set_${setNumber}_reps`] ?? ""}
+                          onChange={(e) => {
+                            const key = `log_${order}_set_${setNumber}_reps`;
+                            const v = e.target.value;
+                            setDraftInputs((s) => {
+                              const next = { ...s, [key]: v };
+                              persistDraft({ inputs: next });
+                              return next;
+                            });
+                          }}
                         />
                         <input
                           className="input"
                           inputMode="decimal"
                           name={`log_${order}_set_${setNumber}_rpe`}
                           placeholder="RPE"
+                          defaultValue={draftInputs[`log_${order}_set_${setNumber}_rpe`] ?? ""}
+                          onChange={(e) => {
+                            const key = `log_${order}_set_${setNumber}_rpe`;
+                            const v = e.target.value;
+                            setDraftInputs((s) => {
+                              const next = { ...s, [key]: v };
+                              persistDraft({ inputs: next });
+                              return next;
+                            });
+                          }}
                         />
                       </div>
                     );
@@ -481,7 +654,19 @@ export function WorkoutRunnerClient({
           );
         })}
 
-        <button className="btn btnPrimary" type="submit" style={{ padding: "12px 16px" }}>
+        <button
+          className="btn btnPrimary"
+          type="submit"
+          style={{ padding: "12px 16px" }}
+          onClick={() => {
+            try {
+              localStorage.removeItem(draftKey);
+              localStorage.removeItem(startKey);
+            } catch {
+              // ignore
+            }
+          }}
+        >
           Complete workout
         </button>
       </form>

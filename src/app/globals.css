@@ -97,6 +97,63 @@ body {
   height: 100%;
 }
 
+/* Ensure bottom nav doesn't cover content */
+body {
+  padding-bottom: 72px;
+}
+
+@media (min-width: 900px) {
+  body {
+    padding-bottom: 0;
+  }
+}
+
+.bottomNav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+  background: rgba(10, 12, 18, 0.82);
+  border-top: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  z-index: 200;
+}
+
+:root[data-theme="light"] .bottomNav {
+  background: rgba(255, 255, 255, 0.86);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .bottomNav {
+    background: rgba(255, 255, 255, 0.86);
+  }
+}
+
+.bottomNavItem {
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  border-radius: var(--radiusSm);
+  border: 1px solid var(--controlBorder);
+  background: var(--controlBg);
+  text-decoration: none;
+}
+
+.bottomNavItem.active {
+  border-color: rgba(var(--accentRgb), 0.55);
+  background: rgba(var(--accentRgb), 0.14);
+}
+
+@media (min-width: 900px) {
+  .bottomNav {
+    display: none;
+  }
+}
+
 body {
   margin: 0;
   color: var(--ink);
@@ -403,6 +460,12 @@ a {
 .setLabel {
   font-size: 13px;
   color: var(--muted);
+}
+
+.setLabel .btnIcon {
+  min-width: 34px;
+  min-height: 34px;
+  padding: 6px;
 }
 
 .restBanner {

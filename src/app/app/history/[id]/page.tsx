@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
+import { Icon } from "../../../../components/Icon";
 
 type SetLog = {
   id: string;
@@ -59,20 +60,22 @@ export default async function WorkoutHistoryDetailPage({ params }: { params: Pro
   }
 
   return (
-    <div className="container" style={{ paddingTop: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>Workout details</h1>
-          <div className="label" style={{ marginTop: 6 }}>
-            Week {wiRes.data.week_number}, Workout {wiRes.data.workout_index} · {new Date(wiRes.data.performed_at).toLocaleString()}
+    <div className="container" style={{ paddingTop: 24 }}>
+      <div className="appBar">
+        <div style={{ minWidth: 0 }}>
+          <div className="appTitle">Workout</div>
+          <div className="label" style={{ marginTop: 4 }}>
+            Week {wiRes.data.week_number} · Workout {wiRes.data.workout_index} · {new Date(wiRes.data.performed_at).toLocaleString()}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link className="btn" href="/app/history">
-            Back
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link className="btn btnIcon" href="/app/history" aria-label="Back" title="Back">
+            <Icon name="chevronLeft" />
+            <span className="srOnly">Back</span>
           </Link>
-          <Link className="btn" href="/app/run">
-            Run
+          <Link className="btn btnIcon" href="/app/run" aria-label="Run" title="Run">
+            <Icon name="play" />
+            <span className="srOnly">Run</span>
           </Link>
         </div>
       </div>

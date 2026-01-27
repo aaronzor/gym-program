@@ -98,6 +98,8 @@ export default async function WorkoutPage({
         label={workoutRes.data.label}
         exercises={exercisesRes.data}
         defaultUnit={settings.defaultUnit}
+        autoRestOnSetDone={settings.autoRestOnSetDone}
+        focusMode={settings.focusMode}
       />
     </div>
   );

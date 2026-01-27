@@ -6,11 +6,15 @@ export type UnitPreference = "kg" | "lb";
 export type UserSettings = {
   theme: ThemePreference;
   defaultUnit: UnitPreference;
+  autoRestOnSetDone: boolean;
+  focusMode: boolean;
 };
 
 export const DEFAULT_SETTINGS: UserSettings = {
   theme: "system",
-  defaultUnit: "kg"
+  defaultUnit: "kg",
+  autoRestOnSetDone: false,
+  focusMode: false
 };
 
 export async function getUserSettings(): Promise<UserSettings> {
@@ -23,7 +27,7 @@ export async function getUserSettings(): Promise<UserSettings> {
 
   const res = await supabase
     .from("user_settings")
-    .select("theme, default_unit")
+    .select("theme, default_unit, auto_rest_on_set_done, focus_mode")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -36,9 +40,13 @@ export async function getUserSettings(): Promise<UserSettings> {
 
   const theme = (res.data.theme ?? "system") as UserSettings["theme"];
   const defaultUnit = (res.data.default_unit ?? "kg") as UserSettings["defaultUnit"];
+  const autoRestOnSetDone = Boolean((res.data as any).auto_rest_on_set_done);
+  const focusMode = Boolean((res.data as any).focus_mode);
 
   if (theme !== "system" && theme !== "dark" && theme !== "light") return DEFAULT_SETTINGS;
-  if (defaultUnit !== "kg" && defaultUnit !== "lb") return { ...DEFAULT_SETTINGS, theme };
+  if (defaultUnit !== "kg" && defaultUnit !== "lb") {
+    return { ...DEFAULT_SETTINGS, theme, autoRestOnSetDone, focusMode };
+  }
 
-  return { theme, defaultUnit };
+  return { theme, defaultUnit, autoRestOnSetDone, focusMode };
 }

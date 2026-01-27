@@ -9,6 +9,8 @@ async function saveSettingsAction(formData: FormData) {
 
   const theme = String(formData.get("theme") ?? "system") as ThemePreference;
   const defaultUnit = String(formData.get("default_unit") ?? "kg") as UnitPreference;
+  const autoRestOnSetDone = formData.get("auto_rest_on_set_done") === "on";
+  const focusMode = formData.get("focus_mode") === "on";
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -23,7 +25,9 @@ async function saveSettingsAction(formData: FormData) {
     {
       user_id: user.id,
       theme: safeTheme,
-      default_unit: safeUnit
+      default_unit: safeUnit,
+      auto_rest_on_set_done: autoRestOnSetDone,
+      focus_mode: focusMode
     },
     { onConflict: "user_id" }
   );
@@ -53,6 +57,8 @@ export default async function SettingsPage({
   const current = await getUserSettings();
   const theme = current.theme ?? DEFAULT_SETTINGS.theme;
   const unit = current.defaultUnit ?? DEFAULT_SETTINGS.defaultUnit;
+  const autoRestOnSetDone = current.autoRestOnSetDone ?? false;
+  const focusMode = current.focusMode ?? false;
 
   return (
     <div className="container" style={{ paddingTop: 34 }}>
@@ -88,7 +94,13 @@ export default async function SettingsPage({
         ) : null}
 
         <div className="card" style={{ padding: 16 }}>
-          <SettingsForm initialTheme={theme} initialUnit={unit} saveSettingsAction={saveSettingsAction} />
+          <SettingsForm
+            initialTheme={theme}
+            initialUnit={unit}
+            initialAutoRestOnSetDone={autoRestOnSetDone}
+            initialFocusMode={focusMode}
+            saveSettingsAction={saveSettingsAction}
+          />
         </div>
       </div>
     </div>

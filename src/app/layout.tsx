@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { getUserSettings } from "../lib/settings";
+import { AppChrome } from "../components/AppChrome";
 
 const sans = Space_Grotesk({
   subsets: ["latin"],
@@ -29,7 +30,9 @@ export default async function RootLayout({
       lang="en"
       data-theme={dataTheme}
     >
-      <body className={sans.variable}>{children}</body>
+      <body className={sans.variable}>
+        <AppChrome>{children}</AppChrome>
+      </body>
     </html>
   );
 }

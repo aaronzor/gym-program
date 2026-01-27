@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { Icon } from "../../../components/Icon";
 
 function labelForWorkoutIndex(workoutIndex: number): "Upper" | "Lower" {
   return workoutIndex % 2 === 1 ? "Upper" : "Lower";
@@ -31,16 +32,16 @@ export default async function HistoryPage() {
   const runIds = (runsRes.data ?? []).map((r) => r.id);
   if (runIds.length === 0) {
     return (
-      <div className="container" style={{ paddingTop: 34 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: 22 }}>History</h1>
-            <div className="label" style={{ marginTop: 6 }}>
-              No program runs yet.
+      <div className="container" style={{ paddingTop: 24 }}>
+        <div className="appBar">
+          <div style={{ minWidth: 0 }}>
+            <div className="appTitle">History</div>
+            <div className="label" style={{ marginTop: 4 }}>
+              No workouts logged yet.
             </div>
           </div>
           <Link className="btn" href="/app">
-            Dashboard
+            Back
           </Link>
         </div>
       </div>
@@ -61,16 +62,17 @@ export default async function HistoryPage() {
   }
 
   return (
-    <div className="container" style={{ paddingTop: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>History</h1>
-          <div className="label" style={{ marginTop: 6 }}>
-            {programRes.data.name} · across all runs
+    <div className="container" style={{ paddingTop: 24 }}>
+      <div className="appBar">
+        <div style={{ minWidth: 0 }}>
+          <div className="appTitle">History</div>
+          <div className="label" style={{ marginTop: 4 }}>
+            {programRes.data.name}
           </div>
         </div>
-        <Link className="btn" href="/app">
-          Dashboard
+        <Link className="btn btnIcon" href="/app/run" aria-label="Run" title="Run">
+          <Icon name="play" />
+          <span className="srOnly">Run</span>
         </Link>
       </div>
 
@@ -84,7 +86,7 @@ export default async function HistoryPage() {
               href={`/app/history/${w.id}`}
               className="card cardInset"
               style={{
-                padding: 14,
+                padding: 12,
                 textDecoration: "none",
                 boxShadow: "none",
                 display: "grid",

@@ -15,14 +15,20 @@ function applyTheme(theme: ThemePreference) {
 export function SettingsForm({
   initialTheme,
   initialUnit,
+  initialAutoRestOnSetDone,
+  initialFocusMode,
   saveSettingsAction
 }: {
   initialTheme: ThemePreference;
   initialUnit: UnitPreference;
+  initialAutoRestOnSetDone: boolean;
+  initialFocusMode: boolean;
   saveSettingsAction: (formData: FormData) => Promise<void>;
 }) {
   const [theme, setTheme] = useState<ThemePreference>(initialTheme);
   const [unit, setUnit] = useState<UnitPreference>(initialUnit);
+  const [autoRestOnSetDone, setAutoRestOnSetDone] = useState<boolean>(initialAutoRestOnSetDone);
+  const [focusMode, setFocusMode] = useState<boolean>(initialFocusMode);
 
   // Ensure the UI reflects server-loaded preference on mount.
   useEffect(() => {
@@ -56,6 +62,31 @@ export function SettingsForm({
           <option value="lb">lb</option>
         </select>
       </div>
+
+      <label className="card cardInset" style={{ padding: 12, boxShadow: "none", display: "flex", gap: 10, alignItems: "center" }}>
+        <input
+          type="checkbox"
+          name="auto_rest_on_set_done"
+          checked={autoRestOnSetDone}
+          onChange={(e) => setAutoRestOnSetDone(e.target.checked)}
+        />
+        <div>
+          <div style={{ fontWeight: 800 }}>Auto-start rest timer</div>
+          <div className="label" style={{ marginTop: 2 }}>
+            When you mark a set done, start rest automatically.
+          </div>
+        </div>
+      </label>
+
+      <label className="card cardInset" style={{ padding: 12, boxShadow: "none", display: "flex", gap: 10, alignItems: "center" }}>
+        <input type="checkbox" name="focus_mode" checked={focusMode} onChange={(e) => setFocusMode(e.target.checked)} />
+        <div>
+          <div style={{ fontWeight: 800 }}>Focus mode</div>
+          <div className="label" style={{ marginTop: 2 }}>
+            Expanding one exercise collapses the others.
+          </div>
+        </div>
+      </label>
 
       <button className="btn btnPrimary btnLg" type="submit" style={{ justifyContent: "center" }}>
         Save settings
