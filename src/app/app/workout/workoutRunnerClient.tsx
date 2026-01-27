@@ -35,6 +35,18 @@ function compareBestSet(a: { weight: number; reps: number } | null, b: { weight:
   return 0;
 }
 
+function isValidSetNumber(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+function fmtLoggedSet(set: { set_number: number; weight: number | null; reps: number | null; rpe: number | null; unit: string | null }) {
+  const w = set.weight ?? "-";
+  const u = set.unit ?? "";
+  const r = set.reps ?? "-";
+  const p = set.rpe ?? "-";
+  return `Set ${set.set_number}: ${w}${u} x ${r} @ ${p}`;
+}
+
 function parseRestSeconds(restTarget: string | null): number {
   if (!restTarget) return 90;
   const s = restTarget.trim().toLowerCase();
@@ -802,7 +814,10 @@ export function WorkoutRunnerClient({
 
                   {bestLines.length ? (
                     <div>
-                      <div style={{ fontWeight: 800 }}>Best set (recent {historySessions.length})</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 800 }}>Best set</div>
+                        <div className="label">Recent {historySessions.length}</div>
+                      </div>
                       <div className="label" style={{ marginTop: 4 }}>
                         {bestLines.join(" · ")}
                       </div>
@@ -810,12 +825,10 @@ export function WorkoutRunnerClient({
                   ) : null}
 
                   <div>
-                    <div style={{ fontWeight: 800 }}>Last working set (that session)</div>
+                    <div style={{ fontWeight: 800 }}>Last working set</div>
                     <div className="label" style={{ marginTop: 4 }}>
-                      {session.last_set
-                        ? `Set ${session.last_set.set_number}: ${session.last_set.weight ?? "-"}${
-                            session.last_set.unit ?? ""
-                          } x ${session.last_set.reps ?? "-"} @ ${session.last_set.rpe ?? "-"}`
+                      {session.last_set && isValidSetNumber((session.last_set as any).set_number)
+                        ? fmtLoggedSet(session.last_set as any)
                         : "No working sets logged"}
                     </div>
                   </div>
@@ -826,20 +839,19 @@ export function WorkoutRunnerClient({
                     </Link>
                   </div>
 
-                  {Array.isArray(session.sets) && session.sets.length ? (
+                  {Array.isArray(session.sets) && session.sets.filter((s: any) => isValidSetNumber(s?.set_number)).length ? (
                     <div>
-                      <div style={{ fontWeight: 800 }}>All working sets (that session)</div>
+                      <div style={{ fontWeight: 800 }}>All working sets</div>
                       <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
-                        {session.sets.map((set) => (
+                        {session.sets
+                          .filter((s: any) => isValidSetNumber(s?.set_number))
+                          .map((set: any) => (
                           <div
                             key={set.set_number}
                             className="card"
                             style={{ padding: 10, boxShadow: "none", background: "rgba(255,255,255,0.04)" }}
                           >
-                            <div className="label">
-                              Set {set.set_number}: {set.weight ?? "-"}
-                              {set.unit ?? ""} x {set.reps ?? "-"} @ {set.rpe ?? "-"}
-                            </div>
+                            <div className="label">{fmtLoggedSet(set)}</div>
                           </div>
                         ))}
                       </div>

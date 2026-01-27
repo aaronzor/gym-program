@@ -54,7 +54,7 @@ as $$
           'unit', sl.unit
         )
         order by sl.set_number asc
-      ) as sets,
+      ) filter (where sl.set_number is not null) as sets,
       (jsonb_agg(
         jsonb_build_object(
           'set_number', sl.set_number,
@@ -64,7 +64,7 @@ as $$
           'unit', sl.unit
         )
         order by sl.set_number desc
-      )->0) as last_set
+      ) filter (where sl.set_number is not null)->0) as last_set
     from sessions s
     left join public.set_logs sl
       on sl.exercise_instance_id = s.exercise_instance_id
