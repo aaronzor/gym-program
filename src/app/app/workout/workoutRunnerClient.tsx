@@ -584,11 +584,13 @@ export function WorkoutRunnerClient({
                           </button>
                         </div>
                         <input
-                          className="input"
+                          className="input inputSm"
                           inputMode="decimal"
                           name={`log_${order}_set_${setNumber}_weight`}
                           id={`log_${order}_set_${setNumber}_weight`}
                           placeholder={`Weight (${unit})`}
+                          maxLength={7}
+                          aria-label={`Set ${setNumber} weight (${unit})`}
                           defaultValue={draftInputs[`log_${order}_set_${setNumber}_weight`] ?? ""}
                           onChange={(e) => {
                             const key = `log_${order}_set_${setNumber}_weight`;
@@ -601,10 +603,12 @@ export function WorkoutRunnerClient({
                           }}
                         />
                         <input
-                          className="input"
+                          className="input inputSm"
                           inputMode="numeric"
                           name={`log_${order}_set_${setNumber}_reps`}
                           placeholder="Reps"
+                          maxLength={3}
+                          aria-label={`Set ${setNumber} reps`}
                           defaultValue={draftInputs[`log_${order}_set_${setNumber}_reps`] ?? ""}
                           onChange={(e) => {
                             const key = `log_${order}_set_${setNumber}_reps`;
@@ -617,10 +621,12 @@ export function WorkoutRunnerClient({
                           }}
                         />
                         <input
-                          className="input"
+                          className="input inputSm"
                           inputMode="decimal"
                           name={`log_${order}_set_${setNumber}_rpe`}
                           placeholder="RPE"
+                          maxLength={4}
+                          aria-label={`Set ${setNumber} RPE`}
                           defaultValue={draftInputs[`log_${order}_set_${setNumber}_rpe`] ?? ""}
                           onChange={(e) => {
                             const key = `log_${order}_set_${setNumber}_rpe`;
@@ -657,7 +663,7 @@ export function WorkoutRunnerClient({
         <button
           className="btn btnPrimary"
           type="submit"
-          style={{ padding: "12px 16px" }}
+          style={{ padding: "12px 16px", marginTop: 6 }}
           onClick={() => {
             try {
               localStorage.removeItem(draftKey);
