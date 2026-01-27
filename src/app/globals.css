@@ -195,6 +195,37 @@ a {
   color: var(--muted);
 }
 
+.restBanner {
+  position: sticky;
+  top: 12px;
+  z-index: 50;
+  margin-bottom: 14px;
+}
+
+.restBannerInner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(56, 189, 248, 0.20);
+  background: linear-gradient(180deg, rgba(56, 189, 248, 0.14), rgba(110, 231, 183, 0.08));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px);
+}
+
+.restBannerTitle {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.restBannerTime {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 @media (max-width: 520px) {
   .setRow {
     grid-template-columns: 1fr 1fr;

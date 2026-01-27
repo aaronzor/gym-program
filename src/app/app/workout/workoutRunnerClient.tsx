@@ -1,10 +1,37 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { VideoModal } from "../../../components/VideoModal";
 import type { ExerciseRow } from "./workoutRunner";
 
 type Choice = "primary" | "sub1" | "sub2";
+
+function parseRestSeconds(restTarget: string | null): number {
+  if (!restTarget) return 90;
+  const s = restTarget.trim().toLowerCase();
+  if (s === "0" || s.includes("0 min")) return 0;
+
+  // Examples in your sheet: "~2 min", "~1.5 min"
+  const m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*(min|mins|minute|minutes)/);
+  if (m) {
+    const mins = Number(m[1]);
+    if (Number.isFinite(mins)) return Math.max(0, Math.round(mins * 60));
+  }
+  const sec = s.match(/([0-9]+)\s*(s|sec|secs|second|seconds)/);
+  if (sec) {
+    const n = Number(sec[1]);
+    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
+  }
+
+  return 90;
+}
+
+function fmt(seconds: number): string {
+  const s = Math.max(0, Math.trunc(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
 
 export function WorkoutRunnerClient({
   userProgramId,
@@ -22,12 +49,59 @@ export function WorkoutRunnerClient({
   const [unit, setUnit] = useState<"lb" | "kg">("lb");
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
 
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [restLabel, setRestLabel] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!restEndsAt) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [restEndsAt]);
+
+  const remaining = restEndsAt ? Math.max(0, Math.ceil((restEndsAt - now) / 1000)) : 0;
+  const active = Boolean(restEndsAt && remaining > 0);
+
+  useEffect(() => {
+    if (!restEndsAt) return;
+    if (remaining > 0) return;
+    // Auto-clear after it hits 0, but keep it visible briefly
+    const t = setTimeout(() => {
+      setRestEndsAt(null);
+      setRestLabel(null);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [restEndsAt, remaining]);
+
   const header = useMemo(() => {
     return `${label} workout`;
   }, [label]);
 
   return (
     <div className="card" style={{ marginTop: 16, padding: 18 }}>
+      {restEndsAt ? (
+        <div className="restBanner">
+          <div className="restBannerInner">
+            <div>
+              <div className="restBannerTitle">Rest timer{restLabel ? ` · ${restLabel}` : ""}</div>
+              <div className="restBannerTime">{active ? fmt(remaining) : "Done"}</div>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setRestEndsAt(null);
+                  setRestLabel(null);
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18 }}>{header}</h2>
@@ -73,6 +147,7 @@ export function WorkoutRunnerClient({
                 : ex.primary_video_url;
 
           const workingSets = Math.max(1, ex.working_sets_target ?? 1);
+          const restSeconds = parseRestSeconds(ex.rest_target);
 
           return (
             <div
@@ -129,6 +204,19 @@ export function WorkoutRunnerClient({
                     {ex.sub2_name}
                   </button>
                 ) : null}
+
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    const end = Date.now() + restSeconds * 1000;
+                    setRestEndsAt(end);
+                    setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
+                  }}
+                  title="Start rest timer"
+                >
+                  Start rest
+                </button>
               </div>
 
               {/* Hidden values used by server action */}
