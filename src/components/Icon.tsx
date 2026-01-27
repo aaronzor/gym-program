@@ -7,6 +7,8 @@ type IconName =
   | "sets"
   | "target"
   | "barbell"
+  | "settings"
+  | "user"
   | "chevronDown"
   | "chevronUp"
   | "chevronLeft"
@@ -96,6 +98,29 @@ export function Icon({
           <path d="M18 9v6" />
           <path d="M20 10v4" />
           <path d="M7 12h10" />
+        </svg>
+      );
+    case "settings":
+      return (
+        <svg {...common}>
+          {/* minimalist cog: outer ring + ticks + hub */}
+          <circle cx="12" cy="12" r="7.5" />
+          <circle cx="12" cy="12" r="3" />
+          <path d="M12 1.5v2.5" />
+          <path d="M12 20v2.5" />
+          <path d="M1.5 12h2.5" />
+          <path d="M20 12h2.5" />
+          <path d="M4.4 4.4l1.8 1.8" />
+          <path d="M17.8 17.8l1.8 1.8" />
+          <path d="M19.6 4.4l-1.8 1.8" />
+          <path d="M6.2 17.8l-1.8 1.8" />
+        </svg>
+      );
+    case "user":
+      return (
+        <svg {...common}>
+          <path d="M20 21a8 8 0 0 0-16 0" />
+          <path d="M12 11a4 4 0 1 0-4-4 4 4 0 0 0 4 4z" />
         </svg>
       );
     case "chevronLeft":

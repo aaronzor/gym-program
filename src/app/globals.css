@@ -12,6 +12,16 @@
   --line: rgba(238, 241, 248, 0.18);
   --ring: rgba(56, 189, 248, 0.30);
 
+  --controlBg: rgba(238, 241, 248, 0.03);
+  --controlBgHover: rgba(238, 241, 248, 0.07);
+  --controlBorder: rgba(238, 241, 248, 0.24);
+  --controlBorderHover: rgba(238, 241, 248, 0.32);
+
+  --placeholder: rgba(238, 241, 248, 0.52);
+
+  --bannerBg: rgba(18, 22, 40, 0.92);
+  --bannerBorder: rgba(238, 241, 248, 0.22);
+
   --accent: #38bdf8;
   --accentRgb: 56, 189, 248;
   --accent2: #4ade80;
@@ -21,8 +31,36 @@
   --radiusSm: 6px;
 }
 
+/* User override */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f7fb;
+  --bg2: #f6f7fb;
+  --ink: #0b1020;
+  --muted: rgba(11, 16, 32, 0.62);
+  --panel: #ffffff;
+  --panel2: #f3f4f8;
+  --panel3: rgba(11, 16, 32, 0.04);
+  --line: rgba(11, 16, 32, 0.12);
+  --ring: rgba(37, 99, 235, 0.18);
+  --accent: #2563eb;
+  --accentRgb: 37, 99, 235;
+  --accent2: #16a34a;
+  --shadow: 0 10px 26px rgba(11, 16, 32, 0.10);
+
+  --controlBg: rgba(11, 16, 32, 0.04);
+  --controlBgHover: rgba(11, 16, 32, 0.07);
+  --controlBorder: rgba(11, 16, 32, 0.18);
+  --controlBorderHover: rgba(11, 16, 32, 0.24);
+
+  --placeholder: rgba(11, 16, 32, 0.46);
+
+  --bannerBg: rgba(255, 255, 255, 0.92);
+  --bannerBorder: rgba(11, 16, 32, 0.18);
+}
+
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     color-scheme: light;
     --bg: #f6f7fb;
     --bg2: #f6f7fb;
@@ -30,11 +68,23 @@
     --muted: rgba(11, 16, 32, 0.62);
     --panel: #ffffff;
     --panel2: #f3f4f8;
+    --panel3: rgba(11, 16, 32, 0.04);
     --line: rgba(11, 16, 32, 0.12);
     --ring: rgba(37, 99, 235, 0.18);
     --accent: #2563eb;
+    --accentRgb: 37, 99, 235;
     --accent2: #16a34a;
     --shadow: 0 10px 26px rgba(11, 16, 32, 0.10);
+
+    --controlBg: rgba(11, 16, 32, 0.04);
+    --controlBgHover: rgba(11, 16, 32, 0.07);
+    --controlBorder: rgba(11, 16, 32, 0.18);
+    --controlBorderHover: rgba(11, 16, 32, 0.24);
+
+    --placeholder: rgba(11, 16, 32, 0.46);
+
+    --bannerBg: rgba(255, 255, 255, 0.92);
+    --bannerBorder: rgba(11, 16, 32, 0.18);
   }
 }
 
@@ -108,8 +158,8 @@ a {
   gap: 8px;
   padding: 10px 14px;
   border-radius: var(--radiusSm);
-  border: 1px solid rgba(238, 241, 248, 0.22);
-  background: rgba(238, 241, 248, 0.02);
+  border: 1px solid var(--controlBorder);
+  background: var(--controlBg);
   color: var(--ink);
   text-decoration: none;
   cursor: pointer;
@@ -190,8 +240,8 @@ a {
 }
 
 .btn:hover {
-  background: rgba(238, 241, 248, 0.06);
-  border-color: rgba(238, 241, 248, 0.26);
+  background: var(--controlBgHover);
+  border-color: var(--controlBorderHover);
 }
 
 .btn:active {
@@ -199,13 +249,13 @@ a {
 }
 
 .btnPrimary {
-  border-color: rgba(56, 189, 248, 0.45);
-  background: rgba(56, 189, 248, 0.18);
+  border-color: rgba(var(--accentRgb), 0.48);
+  background: rgba(var(--accentRgb), 0.16);
   box-shadow: none;
 }
 
 .btnPrimary:hover {
-  background: rgba(56, 189, 248, 0.24);
+  background: rgba(var(--accentRgb), 0.22);
 }
 
 .btnIcon:hover {
@@ -221,8 +271,8 @@ a {
   width: 100%;
   padding: 12px 12px;
   border-radius: var(--radiusSm);
-  border: 1px solid rgba(238, 241, 248, 0.22);
-  background: rgba(238, 241, 248, 0.02);
+  border: 1px solid var(--controlBorder);
+  background: var(--controlBg);
   font-size: 16px;
   line-height: 1.2;
   min-height: 44px;
@@ -230,12 +280,12 @@ a {
 }
 
 .input::placeholder {
-  color: rgba(238, 241, 248, 0.50);
+  color: var(--placeholder);
 }
 
 .input:focus {
   outline: none;
-  border-color: rgba(56, 189, 248, 0.45);
+  border-color: rgba(var(--accentRgb), 0.48);
   box-shadow: 0 0 0 4px var(--ring);
 }
 
@@ -267,7 +317,7 @@ a {
   padding: 6px 10px;
   border-radius: var(--radiusSm);
   border: 1px solid var(--line);
-  background: rgba(238, 241, 248, 0.03);
+  background: var(--controlBg);
   font-size: 12px;
   color: var(--muted);
   letter-spacing: 0.01em;
@@ -293,7 +343,7 @@ a {
     padding: 5px 8px;
     gap: 5px;
     font-size: 11px;
-    background: rgba(238, 241, 248, 0.035);
+    background: var(--controlBg);
   }
 }
 
@@ -369,8 +419,8 @@ a {
   gap: 12px;
   padding: 10px 12px;
   border-radius: var(--radiusSm);
-  border: 1px solid rgba(238, 241, 248, 0.22);
-  background: rgba(18, 22, 40, 0.92);
+  border: 1px solid var(--bannerBorder);
+  background: var(--bannerBg);
   box-shadow: none;
 }
 

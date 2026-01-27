@@ -90,12 +90,18 @@ export default async function AppHomePage() {
             {user.email}
           </div>
         </div>
-        <form action={signOutAction}>
-          <button className="btn btnIcon" type="submit" aria-label="Sign out" title="Sign out">
-            <Icon name="x" />
-            <span className="srOnly">Sign out</span>
-          </button>
-        </form>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link className="btn btnIcon" href="/app/settings" aria-label="Settings" title="Settings">
+            <Icon name="settings" />
+            <span className="srOnly">Settings</span>
+          </Link>
+          <form action={signOutAction}>
+            <button className="btn btnIcon" type="submit" aria-label="Sign out" title="Sign out">
+              <Icon name="x" />
+              <span className="srOnly">Sign out</span>
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="stack" style={{ marginTop: 16 }}>

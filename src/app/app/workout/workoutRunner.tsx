@@ -173,13 +173,15 @@ export function WorkoutRunner({
   userProgramId,
   workoutNumber,
   label,
-  exercises
+  exercises,
+  defaultUnit
 }: {
   programTemplateId: string;
   userProgramId: string;
   workoutNumber: number;
   label: string;
   exercises: ExerciseRow[];
+  defaultUnit: "kg" | "lb";
 }) {
   return (
     <WorkoutRunnerClient
@@ -188,6 +190,7 @@ export function WorkoutRunner({
       workoutNumber={workoutNumber}
       label={label}
       exercises={exercises}
+      defaultUnit={defaultUnit}
       completeWorkoutAction={completeWorkoutAction}
     />
   );

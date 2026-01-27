@@ -68,6 +68,7 @@ export function WorkoutRunnerClient({
   workoutNumber,
   label,
   exercises,
+  defaultUnit,
   completeWorkoutAction
 }: {
   programTemplateId: string;
@@ -75,9 +76,10 @@ export function WorkoutRunnerClient({
   workoutNumber: number;
   label: string;
   exercises: ExerciseRow[];
+  defaultUnit: "kg" | "lb";
   completeWorkoutAction: (formData: FormData) => Promise<void>;
 }) {
-  const [unit, setUnit] = useState<"lb" | "kg">("kg");
+  const [unit, setUnit] = useState<"lb" | "kg">(defaultUnit);
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
 
   const [swapOpenOrder, setSwapOpenOrder] = useState<number | null>(null);
