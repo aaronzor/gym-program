@@ -1,16 +1,12 @@
 import type { Metadata } from "next";
-import { Fraunces, Space_Grotesk } from "next/font/google";
+import { Space_Grotesk } from "next/font/google";
 import "./globals.css";
+import { getUserSettings } from "../lib/settings";
+import { AppChrome } from "../components/AppChrome";
 
 const sans = Space_Grotesk({
   subsets: ["latin"],
   variable: "--font-sans",
-  display: "swap"
-});
-
-const display = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-display",
   display: "swap"
 });
 
@@ -19,14 +15,24 @@ export const metadata: Metadata = {
   description: "Track your gym program and progress"
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Intentionally server-side: ensures theme applies on first paint.
+  // If the user selects "system", we omit the data attribute and let CSS media queries decide.
+  const settings = await getUserSettings();
+  const dataTheme = settings.theme === "system" ? undefined : settings.theme;
+
   return (
-    <html lang="en">
-      <body className={`${sans.variable} ${display.variable}`}>{children}</body>
+    <html
+      lang="en"
+      data-theme={dataTheme}
+    >
+      <body className={sans.variable}>
+        <AppChrome>{children}</AppChrome>
+      </body>
     </html>
   );
 }

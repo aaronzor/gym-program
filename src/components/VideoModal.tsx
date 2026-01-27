@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { Icon } from "./Icon";
 
 function parseYouTube(url: string): { id: string; startSeconds: number } | null {
   try {
@@ -44,10 +45,12 @@ function youtubeEmbedUrl(videoId: string, startSeconds: number): string {
 
 export function VideoModal({
   url,
-  label = "Video"
+  label = "Video",
+  variant = "text"
 }: {
   url: string | null | undefined;
   label?: string;
+  variant?: "text" | "icon";
 }) {
   const [open, setOpen] = useState(false);
   const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
@@ -130,8 +133,21 @@ export function VideoModal({
 
   return (
     <>
-      <button className="btn" type="button" onClick={() => setOpen(true)}>
-        {label}
+      <button
+        className={variant === "icon" ? "btn btnIcon" : "btn"}
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={label}
+        title={label}
+      >
+        {variant === "icon" ? (
+          <>
+            <Icon name="play" />
+            <span className="srOnly">{label}</span>
+          </>
+        ) : (
+          label
+        )}
       </button>
 
       {portalEl ? createPortal(modal, portalEl) : null}

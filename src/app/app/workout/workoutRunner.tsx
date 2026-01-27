@@ -30,10 +30,21 @@ async function completeWorkoutAction(formData: FormData) {
 
   const userProgramId = String(formData.get("user_program_id") ?? "");
   const workoutNumber = Number(formData.get("workout_number") ?? NaN);
-  const unit = String(formData.get("unit") ?? "lb");
+  const unit = String(formData.get("unit") ?? "kg");
+  const startedAtMsRaw = String(formData.get("started_at_ms") ?? "").trim();
+  const startedAtMs = startedAtMsRaw ? Number(startedAtMsRaw) : NaN;
+  const durationSecondsRaw = String(formData.get("duration_seconds") ?? "").trim();
+  const durationSecondsFromClient = durationSecondsRaw ? Number(durationSecondsRaw) : NaN;
 
   if (!userProgramId) redirect("/app/run?error=Missing%20user_program_id");
   if (!Number.isFinite(workoutNumber)) redirect("/app/run?error=Invalid%20workout_number");
+
+  const performedAt = new Date();
+  const durationSeconds = Number.isFinite(durationSecondsFromClient)
+    ? Math.max(0, Math.round(durationSecondsFromClient))
+    : Number.isFinite(startedAtMs)
+      ? Math.max(0, Math.round((performedAt.getTime() - startedAtMs) / 1000))
+      : null;
 
   // Insert workout instance
   const wi = await supabase
@@ -41,12 +52,27 @@ async function completeWorkoutAction(formData: FormData) {
     .insert({
       user_program_id: userProgramId,
       workout_number: workoutNumber,
-      performed_at: new Date().toISOString()
+      performed_at: performedAt.toISOString(),
+      duration_seconds: durationSeconds
     })
     .select("id")
     .single();
 
   if (wi.error) {
+    // Handle duplicate submissions gracefully.
+    if (String((wi.error as any).code ?? "") === "23505" || /duplicate key/i.test(wi.error.message)) {
+      const existing = await supabase
+        .from("workout_instances")
+        .select("id")
+        .eq("user_program_id", userProgramId)
+        .eq("workout_number", workoutNumber)
+        .maybeSingle();
+
+      if (!existing.error && existing.data?.id) {
+        redirect(`/app/history/${existing.data.id}`);
+      }
+    }
+
     redirect(`/app/run?error=${encodeURIComponent(wi.error.message)}`);
   }
 
@@ -169,22 +195,35 @@ async function completeWorkoutAction(formData: FormData) {
 }
 
 export function WorkoutRunner({
+  programTemplateId,
   userProgramId,
   workoutNumber,
   label,
-  exercises
+  exercises,
+  defaultUnit
+  ,
+  autoRestOnSetDone,
+  focusMode
 }: {
+  programTemplateId: string;
   userProgramId: string;
   workoutNumber: number;
   label: string;
   exercises: ExerciseRow[];
+  defaultUnit: "kg" | "lb";
+  autoRestOnSetDone: boolean;
+  focusMode: boolean;
 }) {
   return (
     <WorkoutRunnerClient
+      programTemplateId={programTemplateId}
       userProgramId={userProgramId}
       workoutNumber={workoutNumber}
       label={label}
       exercises={exercises}
+      defaultUnit={defaultUnit}
+      autoRestOnSetDone={autoRestOnSetDone}
+      focusMode={focusMode}
       completeWorkoutAction={completeWorkoutAction}
     />
   );

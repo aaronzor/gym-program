@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../lib/supabase/server";
+import { Icon } from "../../components/Icon";
 
 async function loginAction(formData: FormData) {
   "use server";
@@ -25,50 +26,66 @@ export default async function LoginPage({
   const error = typeof sp.error === "string" ? sp.error : undefined;
 
   return (
-    <div className="container" style={{ paddingTop: 34 }}>
-      <div className="card" style={{ padding: 18, maxWidth: 520, margin: "0 auto" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-          <h1 style={{ margin: 0, fontSize: 22 }}>Log in</h1>
-          <Link className="btn" href="/">
-            Home
-          </Link>
-        </div>
+    <div className="container">
+      <div className="authShell">
+        <div className="card authCard">
+          <div className="authMark" aria-hidden="true">
+            <Icon name="barbell" size={22} />
+          </div>
 
-        {error ? (
-          <div
-            className="card"
-            style={{
-              marginTop: 12,
-              padding: 12,
-              borderRadius: 14,
-              background: "rgba(179, 83, 43, 0.10)",
-              borderColor: "rgba(179, 83, 43, 0.25)",
-              boxShadow: "none"
-            }}
-          >
-            <div style={{ fontWeight: 600 }}>Login failed</div>
-            <div className="label" style={{ marginTop: 4 }}>
-              {error}
+          <div style={{ textAlign: "center", marginTop: 12 }}>
+            <h1 style={{ margin: 0, fontSize: 22 }}>Log in</h1>
+            <div className="label" style={{ marginTop: 6 }}>
+              Pick up right where you left off.
             </div>
           </div>
-        ) : null}
 
-        <form action={loginAction} style={{ marginTop: 14, display: "grid", gap: 12 }}>
-          <div>
-            <div className="label">Email</div>
-            <input className="input" name="email" type="email" autoComplete="email" required />
-          </div>
-          <div>
-            <div className="label">Password</div>
-            <input className="input" name="password" type="password" autoComplete="current-password" required />
-          </div>
-          <button className="btn btnPrimary" type="submit">
-            Log in
-          </button>
-        </form>
+          {error ? (
+            <div
+              className="card cardInset"
+              style={{
+                marginTop: 14,
+                padding: 12,
+                boxShadow: "none",
+                borderColor: "rgba(239, 68, 68, 0.28)",
+                background: "rgba(239, 68, 68, 0.08)"
+              }}
+            >
+              <div style={{ fontWeight: 700 }}>Login failed</div>
+              <div className="label" style={{ marginTop: 4 }}>
+                {error}
+              </div>
+            </div>
+          ) : null}
 
-        <div className="label" style={{ marginTop: 12 }}>
-          No account? <Link href="/signup">Sign up</Link>
+          <form action={loginAction} style={{ marginTop: 16, display: "grid", gap: 12 }}>
+            <div>
+              <div className="label">Email</div>
+              <input className="input" name="email" type="email" autoComplete="email" required />
+            </div>
+            <div>
+              <div className="label">Password</div>
+              <input className="input" name="password" type="password" autoComplete="current-password" required />
+            </div>
+            <button className="btn btnPrimary btnLg" type="submit">
+              Log in
+            </button>
+          </form>
+
+          <div style={{ marginTop: 12, textAlign: "center" }}>
+            <span className="label">
+              No account? <Link href="/signup">Sign up</Link>
+            </span>
+            <div style={{ marginTop: 10 }}>
+              <Link className="btn" href="/" style={{ justifyContent: "center", width: "100%" }}>
+                Back
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="label" style={{ textAlign: "center", marginTop: 18, opacity: 0.55 }}>
+          By Aaron McMullan
         </div>
       </div>
     </div>

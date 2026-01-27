@@ -1,7 +1,6 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../../../lib/supabase/server";
-import { VideoModal } from "../../../../components/VideoModal";
+import { TemplateWeekClient, TemplateWorkout } from "./TemplateWeekClient";
 
 function weekNumberFromParam(param: string): number {
   const n = Number(param);
@@ -46,7 +45,7 @@ export default async function WeekTemplatePage({ params }: { params: Promise<{ w
   const exercisesRes = await supabase
     .from("exercise_templates")
     .select(
-      "workout_template_id, order_index, name, warmup_sets_target, working_sets_target, reps_target, rpe_target, rest_target, notes, primary_video_url, sub1_name, sub1_video_url, sub2_name, sub2_video_url"
+      "id, workout_template_id, order_index, name, warmup_sets_target, working_sets_target, reps_target, rpe_target, rest_target, notes, primary_video_url, sub1_name, sub1_video_url, sub2_name, sub2_video_url"
     )
     .in("workout_template_id", workoutIds)
     .order("order_index", { ascending: true });
@@ -59,69 +58,27 @@ export default async function WeekTemplatePage({ params }: { params: Promise<{ w
     exByWorkout.set(ex.workout_template_id, arr);
   }
 
-  return (
-    <div className="container" style={{ paddingTop: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>{programRes.data.name}</h1>
-          <div className="label" style={{ marginTop: 6 }}>
-            Week {weekNumber}
-          </div>
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <Link className="btn" href="/app/template">
-            All weeks
-          </Link>
-          <Link className="btn" href="/app">
-            Dashboard
-          </Link>
-        </div>
-      </div>
+  const workouts: TemplateWorkout[] = workoutsRes.data.map((w) => ({
+    id: w.id,
+    workout_index: w.workout_index,
+    label: w.label,
+    exercises: (exByWorkout.get(w.id) ?? []).map((ex) => ({
+      id: ex.id,
+      order_index: ex.order_index,
+      name: ex.name,
+      warmup_sets_target: ex.warmup_sets_target,
+      working_sets_target: ex.working_sets_target,
+      reps_target: ex.reps_target,
+      rpe_target: ex.rpe_target,
+      rest_target: ex.rest_target,
+      notes: ex.notes,
+      primary_video_url: ex.primary_video_url,
+      sub1_name: ex.sub1_name,
+      sub1_video_url: ex.sub1_video_url,
+      sub2_name: ex.sub2_name,
+      sub2_video_url: ex.sub2_video_url
+    }))
+  }));
 
-      <div style={{ marginTop: 16, display: "grid", gap: 14 }}>
-        {workoutsRes.data.map((w) => (
-          <div key={w.id} className="card" style={{ padding: 18 }}>
-            <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 18 }}>
-                Workout {w.workout_index}: {w.label}
-              </h2>
-              <div className="label">{(exByWorkout.get(w.id) ?? []).length} exercises</div>
-            </div>
-
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              {(exByWorkout.get(w.id) ?? []).map((ex) => (
-                <div
-                  key={`${w.id}:${ex.order_index}`}
-                  style={{
-                    borderTop: "1px solid var(--line)",
-                    paddingTop: 10
-                  }}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                    <div style={{ fontWeight: 600 }}>{ex.name}</div>
-                    <div className="label">
-                      warmups {ex.warmup_sets_target ?? "-"} · sets {ex.working_sets_target ?? "-"} · reps{" "}
-                      {ex.reps_target ?? "-"} · RPE {ex.rpe_target ?? "-"}
-                    </div>
-                  </div>
-                  {ex.notes ? (
-                    <div className="label" style={{ marginTop: 6 }}>
-                      {ex.notes}
-                    </div>
-                  ) : null}
-
-                  <div style={{ marginTop: 8, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    <VideoModal url={ex.primary_video_url} label="Primary" />
-                    {ex.sub1_name ? <VideoModal url={ex.sub1_video_url} label={ex.sub1_name} /> : null}
-                    {ex.sub2_name ? <VideoModal url={ex.sub2_video_url} label={ex.sub2_name} /> : null}
-                    {ex.rest_target ? <span className="label">Rest: {ex.rest_target}</span> : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return <TemplateWeekClient weekNumber={weekNumber} programName={programRes.data.name} workouts={workouts} />;
 }

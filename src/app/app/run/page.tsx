@@ -1,34 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
+import { Icon } from "../../../components/Icon";
 
 function computeWeekAndWorkoutIndex(workoutNumber: number): { week: number; workoutIndex: number } {
   const week = Math.floor((workoutNumber - 1) / 4) + 1;
   const workoutIndex = ((workoutNumber - 1) % 4) + 1;
   return { week, workoutIndex };
-}
-
-async function completeWorkoutAction(formData: FormData) {
-  "use server";
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user }
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const userProgramId = String(formData.get("user_program_id") ?? "");
-  if (!userProgramId) redirect("/app/run?error=Missing%20user_program_id");
-
-  const workoutNumber = Number(formData.get("workout_number") ?? NaN);
-  if (!Number.isFinite(workoutNumber)) redirect("/app/run?error=Invalid%20workout_number");
-
-  const ins = await supabase.from("workout_instances").insert({
-    user_program_id: userProgramId,
-    workout_number: workoutNumber,
-    performed_at: new Date().toISOString()
-  });
-  if (ins.error) redirect(`/app/run?error=${encodeURIComponent(ins.error.message)}`);
-  redirect("/app/run");
 }
 
 export default async function ProgramRunPage({
@@ -74,36 +52,28 @@ export default async function ProgramRunPage({
   const { week, workoutIndex } = computeWeekAndWorkoutIndex(nextWorkoutNumber);
 
   return (
-    <div className="container" style={{ paddingTop: 34 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 22 }}>{programRes.data.name}</h1>
-          <div className="label" style={{ marginTop: 6 }}>
-            Active run · completed {completedCount}/48
-          </div>
-          <div className="label" style={{ marginTop: 2 }}>
-            Next up: Week {week}, Workout {workoutIndex}
+    <div className="container" style={{ paddingTop: 24 }}>
+      <div className="appBar">
+        <div style={{ minWidth: 0 }}>
+          <div className="appTitle">Run</div>
+          <div className="label" style={{ marginTop: 4 }}>
+            {programRes.data.name}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link className="btn" href={`/app/template/${week}`}>
-            View week {week}
-          </Link>
-          <Link className="btn" href="/app">
-            Dashboard
-          </Link>
-        </div>
+        <Link className="btn btnIcon" href={`/app/template/${week}`} aria-label="Template" title="Template">
+          <Icon name="sets" />
+          <span className="srOnly">Template</span>
+        </Link>
       </div>
 
       {error ? (
         <div
-          className="card"
+          className="card cardInset"
           style={{
             marginTop: 12,
             padding: 12,
-            borderRadius: 14,
-            background: "rgba(179, 83, 43, 0.10)",
             borderColor: "rgba(179, 83, 43, 0.25)",
+            background: "rgba(179, 83, 43, 0.08)",
             boxShadow: "none"
           }}
         >
@@ -114,23 +84,39 @@ export default async function ProgramRunPage({
         </div>
       ) : null}
 
-      <div className="card" style={{ marginTop: 16, padding: 18 }}>
-        <h2 style={{ margin: 0, fontSize: 18 }}>Quick progress</h2>
-        <div className="label" style={{ marginTop: 10 }}>
-          Start the next workout to log sets, substitutions, and watch form videos in a modal.
-        </div>
+      <div className="stack" style={{ marginTop: 16 }}>
+        <div className="card cardActive" style={{ padding: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
+            <div>
+              <div style={{ fontWeight: 800 }}>Next workout</div>
+              <div className="label" style={{ marginTop: 6 }}>
+                Week {week} · Workout {workoutIndex} · completed {completedCount}/48
+              </div>
+            </div>
+            <Link className="btn btnIcon" href="/app/history" aria-label="History" title="History">
+              <Icon name="history" />
+              <span className="srOnly">History</span>
+            </Link>
+          </div>
 
-        <div style={{ marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Link className="btn btnPrimary" href={`/app/workout?week=${week}&workout=${workoutIndex}`}>
-            Start workout
-          </Link>
-          <form action={completeWorkoutAction}>
-            <input type="hidden" name="user_program_id" value={runRes.data.id} />
-            <input type="hidden" name="workout_number" value={String(nextWorkoutNumber)} />
-            <button className="btn" type="submit">
-              Quick-complete (debug)
-            </button>
-          </form>
+          <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+            <Link
+              className="btn btnPrimary btnLg"
+              href={`/app/workout?week=${week}&workout=${workoutIndex}`}
+              style={{ justifyContent: "center" }}
+            >
+              Start workout
+            </Link>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+              <Link className="btn" href={`/app/template/${week}`} style={{ justifyContent: "center" }}>
+                View week
+              </Link>
+              <Link className="btn" href="/app" style={{ justifyContent: "center" }}>
+                Dashboard
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </div>

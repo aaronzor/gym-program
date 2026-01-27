@@ -1,26 +1,321 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { VideoModal } from "../../../components/VideoModal";
+import { BottomSheet } from "../../../components/BottomSheet";
+import { createSupabaseBrowserClient } from "../../../lib/supabase/client";
+import { Icon } from "../../../components/Icon";
 import type { ExerciseRow } from "./workoutRunner";
 
 type Choice = "primary" | "sub1" | "sub2";
 
+type LastRow = {
+  performed_exercise_name: string;
+  performed_at: string;
+  workout_instance_id: string;
+  last_set: {
+    set_number: number;
+    weight: number | null;
+    reps: number | null;
+    rpe: number | null;
+    unit: string | null;
+  } | null;
+  sets: Array<{ set_number: number; weight: number | null; reps: number | null; rpe: number | null; unit: string | null }>;
+};
+
+type HistorySession = LastRow;
+
+function compareBestSet(a: { weight: number; reps: number } | null, b: { weight: number; reps: number } | null): number {
+  if (!a && !b) return 0;
+  if (!a) return -1;
+  if (!b) return 1;
+  if (a.weight !== b.weight) return a.weight > b.weight ? 1 : -1;
+  if (a.reps !== b.reps) return a.reps > b.reps ? 1 : -1;
+  return 0;
+}
+
+function isValidSetNumber(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+function fmtLoggedSet(set: { set_number: number; weight: number | null; reps: number | null; rpe: number | null; unit: string | null }) {
+  const w = set.weight ?? "-";
+  const u = set.unit ?? "";
+  const r = set.reps ?? "-";
+  const p = set.rpe ?? "-";
+  return `Set ${set.set_number}: ${w}${u} x ${r} @ ${p}`;
+}
+
+function parseRestSeconds(restTarget: string | null): number {
+  if (!restTarget) return 90;
+  const s = restTarget.trim().toLowerCase();
+  if (s === "0" || s.includes("0 min")) return 0;
+
+  // Examples in your sheet: "~2 min", "~1.5 min"
+  const m = s.match(/([0-9]+(?:\.[0-9]+)?)\s*(min|mins|minute|minutes)/);
+  if (m) {
+    const mins = Number(m[1]);
+    if (Number.isFinite(mins)) return Math.max(0, Math.round(mins * 60));
+  }
+  const sec = s.match(/([0-9]+)\s*(s|sec|secs|second|seconds)/);
+  if (sec) {
+    const n = Number(sec[1]);
+    if (Number.isFinite(n)) return Math.max(0, Math.round(n));
+  }
+
+  return 90;
+}
+
+function fmt(seconds: number): string {
+  const s = Math.max(0, Math.trunc(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+type TimerState = {
+  running: boolean;
+  runningSinceMs: number | null;
+  accumulatedMs: number;
+};
+
+function loadTimer(key: string): TimerState {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) throw new Error("no timer");
+    const parsed = JSON.parse(raw) as Partial<TimerState>;
+    const running = Boolean(parsed.running);
+    const runningSinceMs = typeof parsed.runningSinceMs === "number" ? parsed.runningSinceMs : null;
+    const accumulatedMs = typeof parsed.accumulatedMs === "number" ? parsed.accumulatedMs : 0;
+    return { running, runningSinceMs, accumulatedMs };
+  } catch {
+    const now = Date.now();
+    return { running: true, runningSinceMs: now, accumulatedMs: 0 };
+  }
+}
+
+function saveTimer(key: string, state: TimerState): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(state));
+  } catch {
+    // ignore
+  }
+}
+
 export function WorkoutRunnerClient({
+  programTemplateId,
   userProgramId,
   workoutNumber,
   label,
   exercises,
+  defaultUnit,
+  autoRestOnSetDone,
+  focusMode,
   completeWorkoutAction
 }: {
+  programTemplateId: string;
   userProgramId: string;
   workoutNumber: number;
   label: string;
   exercises: ExerciseRow[];
+  defaultUnit: "kg" | "lb";
+  autoRestOnSetDone: boolean;
+  focusMode: boolean;
   completeWorkoutAction: (formData: FormData) => Promise<void>;
 }) {
-  const [unit, setUnit] = useState<"lb" | "kg">("lb");
+  const draftKey = useMemo(() => `draft:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
+  const timerKey = useMemo(() => `timer:${userProgramId}:${workoutNumber}`, [userProgramId, workoutNumber]);
+
+  const [unit, setUnit] = useState<"lb" | "kg">(defaultUnit);
   const [choiceByOrder, setChoiceByOrder] = useState<Record<number, Choice>>({});
+
+  const [swapOpenOrder, setSwapOpenOrder] = useState<number | null>(null);
+
+  const [expandedByOrder, setExpandedByOrder] = useState<Record<number, boolean>>({ 1: true });
+
+  const [setDone, setSetDone] = useState<Record<string, boolean>>({});
+
+  const [draftInputs, setDraftInputs] = useState<Record<string, string>>({});
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [timerState, setTimerState] = useState<TimerState>({
+    running: true,
+    runningSinceMs: Date.now(),
+    accumulatedMs: 0
+  });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(draftKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as any;
+        if (parsed.unit === "kg" || parsed.unit === "lb") setUnit(parsed.unit);
+        if (parsed.choiceByOrder && typeof parsed.choiceByOrder === "object") setChoiceByOrder(parsed.choiceByOrder);
+        if (parsed.expandedByOrder && typeof parsed.expandedByOrder === "object") setExpandedByOrder(parsed.expandedByOrder);
+        if (parsed.setDone && typeof parsed.setDone === "object") setSetDone(parsed.setDone);
+        if (parsed.inputs && typeof parsed.inputs === "object") setDraftInputs(parsed.inputs);
+        setDraftRestored(true);
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const state = loadTimer(timerKey);
+      setTimerState(state);
+      saveTimer(timerKey, state);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    saveTimer(timerKey, timerState);
+  }, [timerKey, timerState]);
+
+  function persistDraft(next: Partial<{ unit: "kg" | "lb"; choiceByOrder: any; expandedByOrder: any; setDone: any; inputs: any }>) {
+    try {
+      const current = {
+        unit,
+        choiceByOrder,
+        expandedByOrder,
+        setDone,
+        inputs: draftInputs
+      };
+      const merged = { ...current, ...next };
+      localStorage.setItem(draftKey, JSON.stringify(merged));
+    } catch {
+      // ignore
+    }
+  }
+
+  const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
+  const [restLabel, setRestLabel] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  const workoutElapsedSeconds = useMemo(() => {
+    const base = timerState.accumulatedMs;
+    const live = timerState.running && timerState.runningSinceMs ? Math.max(0, now - timerState.runningSinceMs) : 0;
+    return Math.max(0, Math.round((base + live) / 1000));
+  }, [now, timerState]);
+
+  const [lastOpenFor, setLastOpenFor] = useState<string | null>(null);
+  const [lastPrefetchStatus, setLastPrefetchStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [lastPrefetchError, setLastPrefetchError] = useState<string | null>(null);
+  const [lastByName, setLastByName] = useState<Record<string, LastRow | null>>({});
+
+  const [historyStatus, setHistoryStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historySessions, setHistorySessions] = useState<HistorySession[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+
+  useEffect(() => {
+    if (!restEndsAt && !timerState.running) return;
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [restEndsAt, timerState.running]);
+
+  const remaining = restEndsAt ? Math.max(0, Math.ceil((restEndsAt - now) / 1000)) : 0;
+  const active = Boolean(restEndsAt && remaining > 0);
+
+  useEffect(() => {
+    if (!restEndsAt) return;
+    if (remaining > 0) return;
+    // Auto-clear after it hits 0, but keep it visible briefly
+    const t = setTimeout(() => {
+      setRestEndsAt(null);
+      setRestLabel(null);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [restEndsAt, remaining]);
+
+  // Prefetch "last time" data for all names in this workout (primary + substitutions).
+  // This keeps the workout UI uncluttered: tapping "Last" is instant.
+  const prefetchNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const ex of exercises) {
+      if (ex.name) names.add(ex.name);
+      if (ex.sub1_name) names.add(ex.sub1_name);
+      if (ex.sub2_name) names.add(ex.sub2_name);
+    }
+    return Array.from(names).filter((n) => n.trim() !== "");
+  }, [exercises]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function run() {
+      if (!prefetchNames.length) return;
+      setLastPrefetchStatus("loading");
+      setLastPrefetchError(null);
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const res = await supabase.rpc("get_last_exercise_performance", {
+          program_template_id: programTemplateId,
+          exercise_names: prefetchNames
+        });
+        if (res.error) throw new Error(res.error.message);
+
+        // Build map of results
+        const rows = (res.data as unknown as LastRow[] | null) ?? [];
+        const byName: Record<string, LastRow | null> = {};
+        for (const name of prefetchNames) byName[name] = null;
+        for (const row of rows) {
+          if (row?.performed_exercise_name) byName[row.performed_exercise_name] = row;
+        }
+
+        if (cancelled) return;
+        setLastByName(byName);
+        setLastPrefetchStatus("ready");
+      } catch (e) {
+        if (cancelled) return;
+        setLastPrefetchStatus("error");
+        setLastPrefetchError(e instanceof Error ? e.message : "Failed to load exercise history");
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [programTemplateId, prefetchNames]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      if (!lastOpenFor) return;
+      setHistoryStatus("loading");
+      setHistoryError(null);
+      setHistorySessions([]);
+      setHistoryIndex(0);
+
+      try {
+        const supabase = createSupabaseBrowserClient();
+        const res = await supabase.rpc("get_exercise_history", {
+          program_template_id: programTemplateId,
+          exercise_name: lastOpenFor,
+          limit_n: 12,
+          offset_n: 0
+        });
+        if (res.error) throw new Error(res.error.message);
+        const rows = (res.data as unknown as HistorySession[] | null) ?? [];
+        if (cancelled) return;
+        setHistorySessions(rows);
+        setHistoryStatus("ready");
+      } catch (e) {
+        if (cancelled) return;
+        setHistoryStatus("error");
+        setHistoryError(e instanceof Error ? e.message : "Failed to load exercise history");
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [lastOpenFor, programTemplateId]);
 
   const header = useMemo(() => {
     return `${label} workout`;
@@ -28,6 +323,60 @@ export function WorkoutRunnerClient({
 
   return (
     <div className="card" style={{ marginTop: 16, padding: 18 }}>
+      {draftRestored ? (
+        <div className="card cardInset" style={{ padding: 12, boxShadow: "none", marginBottom: 12 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
+            <div className="label">Draft restored</div>
+            <button
+              type="button"
+              className="btn btnIcon"
+              aria-label="Clear draft"
+              title="Clear draft"
+              onClick={() => {
+                try {
+                  localStorage.removeItem(draftKey);
+                  localStorage.removeItem(timerKey);
+                } catch {
+                  // ignore
+                }
+                setDraftRestored(false);
+                setDraftInputs({});
+                setSetDone({});
+                setChoiceByOrder({});
+                setExpandedByOrder({ 1: true });
+                setUnit(defaultUnit);
+                setTimerState({ running: true, runningSinceMs: Date.now(), accumulatedMs: 0 });
+              }}
+            >
+              <Icon name="x" />
+              <span className="srOnly">Clear draft</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {restEndsAt ? (
+        <div className="restBanner">
+          <div className="restBannerInner">
+            <div>
+              <div className="restBannerTitle">Rest timer{restLabel ? ` · ${restLabel}` : ""}</div>
+              <div className="restBannerTime">{active ? fmt(remaining) : "Done"}</div>
+            </div>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setRestEndsAt(null);
+                  setRestLabel(null);
+                }}
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18 }}>{header}</h2>
@@ -36,6 +385,30 @@ export function WorkoutRunnerClient({
           </div>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div className="workoutTimer" title="Workout timer">
+            <Icon name="timer" size={16} />
+            <span className="workoutTimerTime">{fmt(workoutElapsedSeconds)}</span>
+            <button
+              type="button"
+              className="btn btnIcon"
+              aria-label={timerState.running ? "Pause workout timer" : "Resume workout timer"}
+              title={timerState.running ? "Pause" : "Resume"}
+              onClick={() => {
+                setTimerState((s) => {
+                  const nowMs = Date.now();
+                  if (s.running) {
+                    const add = s.runningSinceMs ? Math.max(0, nowMs - s.runningSinceMs) : 0;
+                    return { running: false, runningSinceMs: null, accumulatedMs: s.accumulatedMs + add };
+                  }
+                  return { running: true, runningSinceMs: nowMs, accumulatedMs: s.accumulatedMs };
+                });
+              }}
+            >
+              <Icon name={timerState.running ? "pause" : "play"} size={18} />
+              <span className="srOnly">{timerState.running ? "Pause" : "Resume"}</span>
+            </button>
+          </div>
+
           <span className="label">Unit</span>
           <select
             className="input"
@@ -53,10 +426,13 @@ export function WorkoutRunnerClient({
         <input type="hidden" name="user_program_id" value={userProgramId} />
         <input type="hidden" name="workout_number" value={String(workoutNumber)} />
         <input type="hidden" name="unit" value={unit} />
+        <input type="hidden" name="started_at_ms" value={timerState.runningSinceMs ? String(timerState.runningSinceMs) : ""} />
+        <input type="hidden" name="duration_seconds" value={String(workoutElapsedSeconds)} />
 
         {exercises.map((ex) => {
           const order = ex.order_index;
           const choice: Choice = choiceByOrder[order] ?? "primary";
+          const expanded = expandedByOrder[order] ?? false;
 
           const performed =
             choice === "sub1"
@@ -73,63 +449,275 @@ export function WorkoutRunnerClient({
                 : ex.primary_video_url;
 
           const workingSets = Math.max(1, ex.working_sets_target ?? 1);
+          const restSeconds = parseRestSeconds(ex.rest_target);
 
           return (
             <div
               key={ex.id}
-              className="card cardInset"
+              className={expanded ? "card cardInset cardActive" : "card cardInset"}
               style={{
-                padding: 14,
-                boxShadow: "none"
+                padding: expanded ? 14 : 10,
+                boxShadow: "none",
+                overflow: "hidden"
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 800 }}>{performed}</div>
-                  <div className="label" style={{ marginTop: 4 }}>
-                    warmups {ex.warmup_sets_target ?? "-"} · working sets {ex.working_sets_target ?? "-"} · reps{" "}
-                    {ex.reps_target ?? "-"} · RPE {ex.rpe_target ?? "-"}
-                    {ex.rest_target ? ` · rest ${ex.rest_target}` : ""}
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
-                  <VideoModal url={performedVideo} />
-                </div>
-              </div>
-
-              {ex.notes ? (
-                <div className="label" style={{ marginTop: 10 }}>
-                  {ex.notes}
-                </div>
-              ) : null}
-
-              <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
                 <button
                   type="button"
-                  className={choice === "primary" ? "btn btnPrimary" : "btn"}
-                  onClick={() => setChoiceByOrder((s) => ({ ...s, [order]: "primary" }))}
+                  onClick={() => setExpandedByOrder((s) => ({ ...s, [order]: !(s[order] ?? false) }))}
+                  style={{
+                    padding: 0,
+                    border: 0,
+                    background: "transparent",
+                    color: "inherit",
+                    font: "inherit",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    minWidth: 0,
+                    flex: "1 1 auto"
+                  }}
+                  aria-label={expanded ? "Collapse exercise" : "Expand exercise"}
                 >
-                  Primary
+                  <div style={{ fontWeight: 800, minWidth: 0 }}>{performed}</div>
                 </button>
-                {ex.sub1_name ? (
-                  <button
-                    type="button"
-                    className={choice === "sub1" ? "btn btnPrimary" : "btn"}
-                    onClick={() => setChoiceByOrder((s) => ({ ...s, [order]: "sub1" }))}
-                  >
-                    {ex.sub1_name}
-                  </button>
-                ) : null}
-                {ex.sub2_name ? (
-                  <button
-                    type="button"
-                    className={choice === "sub2" ? "btn btnPrimary" : "btn"}
-                    onClick={() => setChoiceByOrder((s) => ({ ...s, [order]: "sub2" }))}
-                  >
-                    {ex.sub2_name}
-                  </button>
-                ) : null}
+
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => {
+                    setExpandedByOrder((s) => {
+                      const next = !(s[order] ?? false);
+                      if (!focusMode) return { ...s, [order]: next };
+
+                      const collapsed: Record<number, boolean> = {};
+                      for (const k of Object.keys(s)) collapsed[Number(k)] = false;
+                      collapsed[order] = next;
+                      return collapsed;
+                    });
+
+                    setTimeout(() => {
+                      persistDraft({ expandedByOrder: { ...expandedByOrder, [order]: !(expandedByOrder[order] ?? false) } });
+                    }, 0);
+                  }}
+                  aria-label={expanded ? "Collapse" : "Expand"}
+                  title={expanded ? "Collapse" : "Expand"}
+                >
+                  <Icon name={expanded ? "chevronUp" : "chevronDown"} />
+                  <span className="srOnly">{expanded ? "Collapse" : "Expand"}</span>
+                </button>
               </div>
+
+              <div style={{ display: expanded ? "block" : "none" }}>
+                <div
+                  style={{
+                    marginTop: 10,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: 10,
+                    alignItems: "flex-start",
+                    flexWrap: "wrap"
+                  }}
+                >
+                  <div className="chips">
+                    <span className="chip" title="Warm-up sets">
+                      <span className="chipIcon" aria-hidden="true">
+                        <Icon name="warmup" size={16} />
+                      </span>
+                      <span className="srOnly">Warm-up sets</span>
+                      <span className="chipValue">{ex.warmup_sets_target ?? "-"}</span>
+                    </span>
+
+                    <span className="chip" title="Working sets">
+                      <span className="chipIcon" aria-hidden="true">
+                        <Icon name="sets" size={16} />
+                      </span>
+                      <span className="srOnly">Working sets</span>
+                      <span className="chipValue">{ex.working_sets_target ?? "-"}</span>
+                    </span>
+
+                    <span className="chip" title="Reps target">
+                      <span className="chipLabel">R</span>
+                      <span className="srOnly">Reps</span>
+                      <span className="chipValue">{ex.reps_target ?? "-"}</span>
+                    </span>
+
+                    <span className="chip" title="RPE target">
+                      <span className="chipIcon" aria-hidden="true">
+                        <Icon name="target" size={16} />
+                      </span>
+                      <span className="srOnly">RPE</span>
+                      <span className="chipValue">{ex.rpe_target ?? "-"}</span>
+                    </span>
+
+                    {ex.rest_target ? (
+                      <span className="chip" title="Rest target">
+                        <span className="chipIcon" aria-hidden="true">
+                          <Icon name="timer" size={16} />
+                        </span>
+                        <span className="srOnly">Rest</span>
+                        <span className="chipValue">{ex.rest_target}</span>
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <VideoModal url={performedVideo} variant="icon" label="Video" />
+                    <button
+                      type="button"
+                      className="btn btnIcon"
+                      onClick={() => setLastOpenFor(performed)}
+                      aria-label="Last time"
+                      title="Last time"
+                    >
+                      <Icon name="history" />
+                      <span className="srOnly">Last time</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btnIcon"
+                      onClick={() => {
+                        const end = Date.now() + restSeconds * 1000;
+                        setRestEndsAt(end);
+                        setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
+                      }}
+                      aria-label="Start rest"
+                      title="Start rest"
+                    >
+                      <Icon name="timer" />
+                      <span className="srOnly">Start rest</span>
+                    </button>
+                <button
+                  type="button"
+                  className="btn btnIcon"
+                  onClick={() => setSwapOpenOrder(order)}
+                  aria-label="Swap exercise"
+                  title="Swap"
+                >
+                  <Icon name="swap" />
+                  <span className="srOnly">Swap</span>
+                </button>
+              </div>
+            </div>
+
+                {ex.notes ? (
+                  <div className="label" style={{ marginTop: 10 }}>
+                    {ex.notes}
+                  </div>
+                ) : null}
+
+                <div
+                  style={{
+                    marginTop: 14,
+                    borderTop: "1px solid var(--line)",
+                    paddingTop: 12,
+                    display: "grid",
+                    gap: 10
+                  }}
+                >
+                  {Array.from({ length: workingSets }).map((_, i) => {
+                    const setNumber = i + 1;
+                    const doneKey = `${order}:${setNumber}`;
+                    return (
+                      <div
+                        key={setNumber}
+                        className="setRow"
+                      >
+                        <div className="setLabel" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <button
+                            type="button"
+                            className={setDone[doneKey] ? "btn btnIcon btnPrimary" : "btn btnIcon"}
+                            aria-label={setDone[doneKey] ? "Set marked done" : "Mark set done"}
+                            title={setDone[doneKey] ? "Done" : "Mark done"}
+                            onClick={() => {
+                              setSetDone((s) => {
+                                const next = { ...s, [doneKey]: !s[doneKey] };
+                                persistDraft({ setDone: next });
+                                return next;
+                              });
+                              if (autoRestOnSetDone) {
+                                const end = Date.now() + restSeconds * 1000;
+                                setRestEndsAt(end);
+                                setRestLabel(ex.rest_target ? `target ${ex.rest_target}` : "target rest");
+                              }
+                              const nextSet = setNumber + 1;
+                              const nextId = `log_${order}_set_${nextSet}_weight`;
+                              const el = document.getElementById(nextId) as HTMLInputElement | null;
+                              if (el) el.focus();
+                              if (focusMode) {
+                                setExpandedByOrder((s) => {
+                                  const next: Record<number, boolean> = {};
+                                  for (const k of Object.keys(s)) next[Number(k)] = false;
+                                  next[order] = true;
+                                  return next;
+                                });
+                              }
+                            }}
+                          >
+                            {setDone[doneKey] ? "✓" : String(setNumber)}
+                          </button>
+                        </div>
+                        <input
+                          className="input inputSm"
+                          inputMode="decimal"
+                          name={`log_${order}_set_${setNumber}_weight`}
+                          id={`log_${order}_set_${setNumber}_weight`}
+                          placeholder={`Weight (${unit})`}
+                          maxLength={7}
+                          aria-label={`Set ${setNumber} weight (${unit})`}
+                          defaultValue={draftInputs[`log_${order}_set_${setNumber}_weight`] ?? ""}
+                          onChange={(e) => {
+                            const key = `log_${order}_set_${setNumber}_weight`;
+                            const v = e.target.value;
+                            setDraftInputs((s) => {
+                              const next = { ...s, [key]: v };
+                              persistDraft({ inputs: next });
+                              return next;
+                            });
+                          }}
+                        />
+                        <input
+                          className="input inputSm"
+                          inputMode="numeric"
+                          name={`log_${order}_set_${setNumber}_reps`}
+                          placeholder="Reps"
+                          maxLength={3}
+                          aria-label={`Set ${setNumber} reps`}
+                          defaultValue={draftInputs[`log_${order}_set_${setNumber}_reps`] ?? ""}
+                          onChange={(e) => {
+                            const key = `log_${order}_set_${setNumber}_reps`;
+                            const v = e.target.value;
+                            setDraftInputs((s) => {
+                              const next = { ...s, [key]: v };
+                              persistDraft({ inputs: next });
+                              return next;
+                            });
+                          }}
+                        />
+                        <input
+                          className="input inputSm"
+                          inputMode="decimal"
+                          name={`log_${order}_set_${setNumber}_rpe`}
+                          placeholder="RPE"
+                          maxLength={4}
+                          aria-label={`Set ${setNumber} RPE`}
+                          defaultValue={draftInputs[`log_${order}_set_${setNumber}_rpe`] ?? ""}
+                          onChange={(e) => {
+                            const key = `log_${order}_set_${setNumber}_rpe`;
+                            const v = e.target.value;
+                            setDraftInputs((s) => {
+                              const next = { ...s, [key]: v };
+                              persistDraft({ inputs: next });
+                              return next;
+                            });
+                          }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Substitutions moved into a bottom sheet to keep mobile UI compact */}
 
               {/* Hidden values used by server action */}
               <input type="hidden" name={`ex_${order}_template_id`} value={ex.id} />
@@ -141,53 +729,201 @@ export function WorkoutRunnerClient({
               <input type="hidden" name={`ex_${order}_sub2_name`} value={ex.sub2_name ?? ""} />
               <input type="hidden" name={`ex_${order}_sub2_video`} value={ex.sub2_video_url ?? ""} />
 
-              <div
-                style={{
-                  marginTop: 14,
-                  borderTop: "1px solid var(--line)",
-                  paddingTop: 12,
-                  display: "grid",
-                  gap: 10
-                }}
-              >
-                {Array.from({ length: workingSets }).map((_, i) => {
-                  const setNumber = i + 1;
-                  return (
-                    <div
-                      key={setNumber}
-                      className="setRow"
-                    >
-                      <div className="setLabel">Set {setNumber}</div>
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        name={`log_${order}_set_${setNumber}_weight`}
-                        placeholder={`Weight (${unit})`}
-                      />
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        name={`log_${order}_set_${setNumber}_reps`}
-                        placeholder="Reps"
-                      />
-                      <input
-                        className="input"
-                        inputMode="decimal"
-                        name={`log_${order}_set_${setNumber}_rpe`}
-                        placeholder="RPE"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           );
         })}
 
-        <button className="btn btnPrimary" type="submit" style={{ padding: "12px 16px" }}>
+        <button
+          className="btn btnPrimary"
+          type="submit"
+          style={{ padding: "12px 16px", marginTop: 6 }}
+          onClick={() => {
+            try {
+              localStorage.removeItem(draftKey);
+              localStorage.removeItem(timerKey);
+            } catch {
+              // ignore
+            }
+          }}
+        >
           Complete workout
         </button>
       </form>
+
+      <BottomSheet
+        open={swapOpenOrder != null}
+        title="Swap exercise"
+        onClose={() => setSwapOpenOrder(null)}
+      >
+        {swapOpenOrder != null ? (
+          (() => {
+            const ex = exercises.find((e) => e.order_index === swapOpenOrder);
+            if (!ex) return <div className="label">Exercise not found.</div>;
+
+            const choice: Choice = choiceByOrder[swapOpenOrder] ?? "primary";
+
+            const options: Array<{ value: Choice; label: string }> = [
+              { value: "primary", label: ex.name }
+            ];
+            if (ex.sub1_name) options.push({ value: "sub1", label: ex.sub1_name });
+            if (ex.sub2_name) options.push({ value: "sub2", label: ex.sub2_name });
+
+            return (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div className="label">Choose a substitution for this whole exercise slot.</div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  {options.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={opt.value === choice ? "btn btnPrimary" : "btn"}
+                      style={{ justifyContent: "flex-start", width: "100%" }}
+                      onClick={() => {
+                        setChoiceByOrder((s) => ({ ...s, [swapOpenOrder]: opt.value }));
+                        setSwapOpenOrder(null);
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()
+        ) : null}
+      </BottomSheet>
+
+      <BottomSheet
+        open={Boolean(lastOpenFor)}
+        title={lastOpenFor ? `Last time: ${lastOpenFor}` : "Last time"}
+        onClose={() => {
+          setLastOpenFor(null);
+          setHistoryStatus("idle");
+          setHistoryError(null);
+          setHistorySessions([]);
+          setHistoryIndex(0);
+        }}
+      >
+        {lastPrefetchStatus === "loading" || historyStatus === "loading" ? <div className="label">Loading…</div> : null}
+        {lastPrefetchStatus === "error" ? (
+          <div className="label" style={{ color: "rgba(245, 158, 11, 0.9)" }}>
+            {lastPrefetchError ?? "Failed to load history"}
+          </div>
+        ) : null}
+
+        {historyStatus === "error" ? (
+          <div className="label" style={{ color: "rgba(245, 158, 11, 0.9)" }}>
+            {historyError ?? "Failed to load exercise history"}
+          </div>
+        ) : null}
+
+        {lastOpenFor && historyStatus === "ready" && historySessions.length === 0 ? (
+          <div className="label">No previous logged workout for this exercise yet.</div>
+        ) : null}
+
+        {lastOpenFor && historyStatus === "ready" && historySessions.length ? (
+          <div style={{ display: "grid", gap: 10 }}>
+            {(() => {
+              const session = historySessions[Math.min(historyIndex, historySessions.length - 1)];
+              const bestByUnit = new Map<string, { weight: number; reps: number }>();
+
+              for (const s of historySessions) {
+                for (const set of s.sets ?? []) {
+                  if (set.weight == null || set.reps == null) continue;
+                  const unitKey = (set.unit ?? "").trim() || "";
+                  const curr = bestByUnit.get(unitKey) ?? null;
+                  const candidate = { weight: Number(set.weight), reps: Number(set.reps) };
+                  if (compareBestSet(candidate, curr) > 0) bestByUnit.set(unitKey, candidate);
+                }
+              }
+
+              const bestLines = Array.from(bestByUnit.entries())
+                .filter(([unitKey]) => unitKey !== "")
+                .map(([unitKey, v]) => `${v.weight}${unitKey} x ${v.reps}`);
+
+              return (
+                <>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div className="label">
+                      Session {historyIndex + 1}/{historySessions.length} · {new Date(session.performed_at).toLocaleString()}
+                    </div>
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        type="button"
+                        className="btn btnIcon"
+                        disabled={historyIndex >= historySessions.length - 1}
+                        onClick={() => setHistoryIndex((i) => Math.min(i + 1, historySessions.length - 1))}
+                        aria-label="Older session"
+                        title="Older"
+                      >
+                        <Icon name="chevronLeft" />
+                        <span className="srOnly">Older</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btnIcon"
+                        disabled={historyIndex <= 0}
+                        onClick={() => setHistoryIndex((i) => Math.max(i - 1, 0))}
+                        aria-label="Newer session"
+                        title="Newer"
+                      >
+                        <Icon name="chevronRight" />
+                        <span className="srOnly">Newer</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {bestLines.length ? (
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 800 }}>Best set</div>
+                        <div className="label">Recent {historySessions.length}</div>
+                      </div>
+                      <div className="label" style={{ marginTop: 4 }}>
+                        {bestLines.join(" · ")}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div>
+                    <div style={{ fontWeight: 800 }}>Last working set</div>
+                    <div className="label" style={{ marginTop: 4 }}>
+                      {session.last_set && isValidSetNumber((session.last_set as any).set_number)
+                        ? fmtLoggedSet(session.last_set as any)
+                        : "No working sets logged"}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    <Link className="btn" href={`/app/history/${session.workout_instance_id}`}>
+                      View full workout
+                    </Link>
+                  </div>
+
+                  {Array.isArray(session.sets) && session.sets.filter((s: any) => isValidSetNumber(s?.set_number)).length ? (
+                    <div>
+                      <div style={{ fontWeight: 800 }}>All working sets</div>
+                      <div style={{ marginTop: 8, display: "grid", gap: 8 }}>
+                        {session.sets
+                          .filter((s: any) => isValidSetNumber(s?.set_number))
+                          .map((set: any) => (
+                          <div
+                            key={set.set_number}
+                            className="card"
+                            style={{ padding: 10, boxShadow: "none", background: "rgba(255,255,255,0.04)" }}
+                          >
+                            <div className="label">{fmtLoggedSet(set)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </>
+              );
+            })()}
+          </div>
+        ) : null}
+      </BottomSheet>
     </div>
   );
 }

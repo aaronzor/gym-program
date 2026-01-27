@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import { WorkoutRunner } from "./workoutRunner";
+import { getUserSettings } from "../../../lib/settings";
 
 function asInt(v: string | null, min: number, max: number): number {
   const n = Number(v);
@@ -69,6 +70,8 @@ export default async function WorkoutPage({
     .order("order_index", { ascending: true });
   if (exercisesRes.error) throw new Error(exercisesRes.error.message);
 
+  const settings = await getUserSettings();
+
   return (
     <div className="container" style={{ paddingTop: 34 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
@@ -89,10 +92,14 @@ export default async function WorkoutPage({
       </div>
 
       <WorkoutRunner
+        programTemplateId={programRes.data.id}
         userProgramId={runRes.data.id}
         workoutNumber={(week - 1) * 4 + workoutIndex}
         label={workoutRes.data.label}
         exercises={exercisesRes.data}
+        defaultUnit={settings.defaultUnit}
+        autoRestOnSetDone={settings.autoRestOnSetDone}
+        focusMode={settings.focusMode}
       />
     </div>
   );
